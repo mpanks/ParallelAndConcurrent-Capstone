@@ -16,13 +16,25 @@ impl ParticleSystem{
         // Circle: [centre-y, width, height] - oblong for perspective
         let mut temp: Vec<Particle> = vec!();
         let mut rng = rand::rng();
-        let max_y = circle[0] + circle[2];
-        let min_y = circle[0] - circle[2];
+
+        let centre_y = circle[0];
+        let radius_x = circle[1];
+        let radius_y = circle[2];
 
         for _ in 0..particle_count{
-            //TODO: ensure particle within circle, this works for squares
-            let x = rng.random_range(-circle[1]..circle[1]);
-            let y = rng.random_range(min_y..max_y);
+            // Random angle
+            let theta = rng.random_range(0.0..2.0 * std::f32::consts::PI);
+
+            // Correct radius distribution
+            let r = rng.random::<f32>().sqrt();
+
+            // Point in unit circle
+            let mut x = r * theta.cos();
+            let mut y = r * theta.sin();
+
+            // Scale to ellipse and translate
+            x = x * radius_x;
+            y = centre_y + y * radius_y;
             //TODO: Figure that range out
             let z: f32 = 0.0;
 
@@ -50,9 +62,8 @@ impl ParticleSystem{
             }
             // 30 degrees is 1:2 ratio of x:y velocity
 
-            //TODO: Random velocity and mass/size
+            //TODO: Random mass/size?
             temp.push(Particle::new(Vertex::new([x, y, z]), [x_vel, y_vel, 0.0], 1.0));
-            println!("{}, {}, vel: {}, {}, angle: {}", x, y, x_vel, y_vel, angle);
         }
         self.particles = temp;
     }
