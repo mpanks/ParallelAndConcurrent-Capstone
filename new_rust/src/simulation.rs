@@ -1,9 +1,11 @@
-use crate::particles;
+use crate::particles::*;
 use crate::bounds;
+use crate::spatial_grid;
 
+use spatial_grid::SpatialGrid;
 use bounds::Bounds;
-use particles::Particles;
 use std::sync::{Arc, atomic::{AtomicU64, Ordering}};
+use rayon::prelude::*;
 pub struct Simulation{
     pub current: Particles,
     pub render: Particles
@@ -14,40 +16,71 @@ impl Simulation {
     }
 }
 
-pub fn physics_step(p: &mut Particles, dt: f32, circle: &[f32; 2], floor_counter: Arc<AtomicU64>, bounds: &Bounds) {
+pub fn physics_step(p: &mut Particles, dt: f32, circle: &[f32; 2], floor_counter: Arc<AtomicU64>, bounds: &Bounds, grid: &mut SpatialGrid) {
     let g = -9.81;
 
-    let len = p.pos_x.len();
+    // Process particles in parallel chunks
+    p.particles
+        .par_chunks_mut(256)
+        .for_each(|chunk| {
+            for particle in chunk.iter_mut() {
+                if !particle.alive { continue; }
 
-    (0..len).into_iter().for_each(|i| {
-        if !p.alive[i] {
-            return;
-        }
+                particle.time += dt;
 
-        // gravity
-        p.vel_y[i] += g * dt;
+                // update velocity
+                particle.velocity[1] += g * dt;
 
-        // integrate
-        p.pos_x[i] += p.vel_x[i] * dt;
-        p.pos_y[i] += p.vel_y[i] * dt;
-        p.pos_z[i] += p.vel_z[i] * dt;
+                // update position
+                particle.position[0] += particle.velocity[0] * dt;
+                particle.position[1] += particle.velocity[1] * dt;
+                particle.position[2] += particle.velocity[2] * dt;
 
-        // floor
-        if p.pos_y[i] <= bounds.min_y {
-            p.respawn(i, circle);
-            p.alive[i] = false;
-            floor_counter.fetch_add(1, Ordering::Relaxed);
-            return;
-        }
+                // floor collision
+                if particle.position[1] <= bounds.min_y {
+                    respawn_particle(particle, circle);
+                    floor_counter.fetch_add(1, Ordering::Relaxed);
+                    continue;
+                }
 
-        // reflect X
-        if p.pos_x[i] < bounds.min_x || p.pos_x[i] > bounds.max_x {
-            p.vel_x[i] = -p.vel_x[i];
-        }
+                // boundary reflections - check position, not velocity
+                if particle.position[0] <= bounds.min_x || particle.position[0] >= bounds.max_x {
+                    particle.velocity[0] *= -1.0;
+                }
 
-        // reflect Z
-        if p.pos_z[i] < bounds.min_z || p.pos_z[i] > bounds.max_z{
-            p.vel_z[i] = -p.vel_z[i];
-        }
-    });
+                if particle.position[2] <= bounds.min_z || particle.position[2] >= bounds.max_z{
+                    particle.velocity[2] *= -1.0;
+                }
+            }
+        });
+}
+
+pub fn cooling_step(p: &mut Particles, dt: f32) {
+    let cooling_rate = 5.0;
+    let ambient = 0.0;
+
+    p.particles
+        .par_iter_mut()
+        .filter(|particle| particle.alive)
+        .for_each(|particle| {
+            // Cooling depends on temp diff. between particle and ambient - more realistic
+            particle.temp += ((ambient - particle.temp) * cooling_rate * dt) / particle.mass;
+
+            if particle.temp < 0.0 {
+                particle.temp = 0.0;
+            }
+        });
+}
+
+fn respawn_particle(
+    particle: &mut Particle,
+    circle: &[f32; 2],
+) {
+    let params = generate_particle(circle);
+
+    particle.position = params[0];
+    particle.velocity = params[1];
+    particle.temp = 1.0;
+    particle.mass = 1.0;
+    particle.time = 0.0;
 }
