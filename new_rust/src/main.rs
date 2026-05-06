@@ -61,10 +61,6 @@ fn main() {
     .num_threads(2)
     .build()
     .unwrap();
-    let collision_pool = ThreadPoolBuilder::new()
-    .num_threads(2)
-    .build()
-    .unwrap();
 
     let (collision_job_tx, collision_job_rx) = unbounded::<(Arc<CollisionSnapshot>, usize, usize)>();
     let (collision_result_tx, collision_result_rx) = bounded::<Vec<collision::Collision>>(2);
@@ -73,21 +69,19 @@ fn main() {
 
     let mut grid = SpatialGrid::new(&bounds, 0.1);
 
-    //for _ in 0..2 {
+    for _ in 0..2 {
         let job_rx = collision_job_rx.clone();
         let result_tx = collision_result_tx.clone();
 
         std::thread::spawn(move || {
-            collision_pool.install(||{
-                while let Ok((snapshot, start_cell, end_cell)) = job_rx.recv() {
-                    let collisions = detect_collisions_snapshot(&snapshot, start_cell, end_cell);
-                    let _ = result_tx.send(collisions);
-                }
-            });
+            while let Ok((snapshot, start_cell, end_cell)) = job_rx.recv() {
+                let collisions = detect_collisions_snapshot(&snapshot, start_cell, end_cell);
+                let _ = result_tx.send(collisions);
+            }
         });
     //}
 
-    {
+    //{
         let merge_particles = Arc::clone(&particles);
         let merge_done_tx = merge_done_tx.clone();
         let merge_job_rx = merge_job_rx.clone();
@@ -132,7 +126,7 @@ fn main() {
             last = now;
 
             let mut particles_guard = particles.lock().unwrap();
-            println!("Live: {}", particles_guard.live_particles());
+            //println!("Live: {}", particles_guard.live_particles());
             //println!("Dead: {}", particles_guard.dead_particles());
 
             emitter.accumulator += emitter.spawn_rate * dt;
@@ -181,6 +175,7 @@ fn main() {
             let particles_guard = particles.lock().unwrap();
             let mut buffer: Vec<vertex::Vertex> = Vec::new();
             particles_guard.write_positions_sampled(&mut buffer, 1000);
+            //println!("{}", buffer.iter().count());
             tx.send(buffer).ok();
         }
     });
