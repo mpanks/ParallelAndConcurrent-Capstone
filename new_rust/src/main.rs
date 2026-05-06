@@ -32,7 +32,7 @@ use crate::simulation::cooling_step;
 
 fn main() {
     let floor_collisions = Arc::new(AtomicU64::new(0));
-    const MAX_PARTICLES: i32 = 100000;
+    const MAX_PARTICLES: i32 = 100_000;
 
     let circle_y = 2.0;
     let circle_radius = 0.05;
@@ -67,7 +67,7 @@ fn main() {
     let (merge_job_tx, merge_job_rx) = unbounded::<Vec<collision::Collision>>();
     let (merge_done_tx, merge_done_rx) = bounded::<()>(1);
 
-    let mut grid = SpatialGrid::new(&bounds, 0.1);
+    let mut grid = SpatialGrid::new(&bounds, 0.0125);
 
     for _ in 0..2 {
         let job_rx = collision_job_rx.clone();
@@ -113,7 +113,7 @@ fn main() {
         let mut last = std::time::Instant::now();
 
         let mut emitter = Emitter {
-            spawn_rate: 1000.0,
+            spawn_rate: 12000.0,
             accumulator: 0.0,
         };
 
@@ -126,9 +126,8 @@ fn main() {
             last = now;
 
             let mut particles_guard = particles.lock().unwrap();
-            //println!("Live: {}", particles_guard.live_particles());
+            println!("Live: {}", particles_guard.live_particles());
             //println!("Dead: {}", particles_guard.dead_particles());
-
             emitter.accumulator += emitter.spawn_rate * dt;
             let mut to_spawn = emitter.accumulator.floor() as usize;
             emitter.accumulator -= to_spawn as f32;
@@ -174,7 +173,7 @@ fn main() {
 
             let particles_guard = particles.lock().unwrap();
             let mut buffer: Vec<vertex::Vertex> = Vec::new();
-            particles_guard.write_positions_sampled(&mut buffer, 1000);
+            particles_guard.write_positions_sampled(&mut buffer, 32);
             //println!("{}", buffer.iter().count());
             tx.send(buffer).ok();
         }
@@ -374,14 +373,14 @@ fn main() {
 
 
                         let params = glium::DrawParameters {
-                            point_size: Some(10.0), // fallback
+                            point_size: Some(5.0), // fallback
                             ..Default::default()
                         };
 
                         let uniforms = uniform! {
                             matrix: matrix,
                             perspective: perspective,
-                            particle_size: 0.1f32,
+                            particle_size: 0.001f32,
                             render_mode: render_mode as i32
                         };
 

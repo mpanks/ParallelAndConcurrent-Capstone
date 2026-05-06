@@ -70,7 +70,7 @@ pub fn detect_collisions_snapshot(snapshot: &CollisionSnapshot, start_idx: usize
                             let dz = snapshot.positions[i][2] - snapshot.positions[j][2];
 
                             let dist2 = dx*dx + dy*dy + dz*dz;
-                            let radius = 0.09;
+                            let radius = 0.001;
                             if dist2 < (radius * 2.0) * (radius * 2.0) {
                                 collisions.push(Collision { a: i, b: j });
                             }

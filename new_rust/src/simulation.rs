@@ -56,7 +56,7 @@ pub fn physics_step(p: &mut Particles, dt: f32, circle: &[f32; 2], floor_counter
 }
 
 pub fn cooling_step(p: &mut Particles, dt: f32) {
-    let cooling_rate = 5.0;
+    let cooling_rate = 2.0;
     let ambient = 0.0;
 
     p.particles
