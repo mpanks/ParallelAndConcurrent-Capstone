@@ -398,6 +398,8 @@ target/
 *.cubin
 *.fatbin
 
+doc/
 docs/
 CUDA/CUDA-ShowerSim/CUDA-ShowerSim/external/glfw/glfw-3.4.bin.WIN64/README.md
 CUDA/CUDA-ShowerSim/CUDA-ShowerSim/external/glfw/glfw-3.4.bin.WIN64/LICENSE.md
+/CUDA/CUDA-ShowerSim/CUDA-ShowerSim/external/glm/.github
