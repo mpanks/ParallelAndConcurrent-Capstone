@@ -1,6 +1,7 @@
 //#include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 #include "Particle.h"
+#include "main.h"
 
 #include <stdio.h>
 
@@ -14,223 +15,49 @@
 #include <vector>
 #include <cmath>
 
-#pragma region Shaders
+GLFWwindow* CreateWindow() {
+    GLFWwindow* window =
+        glfwCreateWindow(
+            1280,
+            720,
+            "Shower Simulation",
+            nullptr,
+            nullptr);
 
-GLuint CompileShader(GLenum type, const char* source)
-{
-    GLuint shader = glCreateShader(type);
-
-    glShaderSource(shader, 1, &source, nullptr);
-
-    glCompileShader(shader);
-
-    return shader;
-}
-
-GLuint CreateShaderProgram(
-    const char* vertexSrc,
-    const char* fragmentSrc)
-{
-    GLuint vertex =
-        CompileShader(GL_VERTEX_SHADER,
-            vertexSrc);
-
-    GLuint fragment =
-        CompileShader(GL_FRAGMENT_SHADER,
-            fragmentSrc);
-
-    GLuint program = glCreateProgram();
-
-    glAttachShader(program, vertex);
-    glAttachShader(program, fragment);
-
-    glLinkProgram(program);
-
-    glDeleteShader(vertex);
-    glDeleteShader(fragment);
-
-    return program;
-}
-
-const char* vertexShaderSource = R"(
-#version 450 core
-
-layout(location = 0)
-in vec3 aPos;
-
-layout(location = 1)
-in vec3 aColor;
-
-out vec3 vColor;
-
-uniform mat4 uMVP;
-
-uniform bool useUniformColor;
-
-uniform vec3 uniformColor;
-
-void main()
-{
-    gl_Position =
-        uMVP * vec4(aPos, 1.0);
-
-    gl_PointSize = 4.0;
-
-    if (useUniformColor)
+    if (!window)
     {
-        vColor = uniformColor;
-    }
-    else
-    {
-        vColor = aColor;
-    }
-}
-)";
+        printf("Window creation failed\n");
 
-const char* fragmentShaderSource = R"(
-#version 450 core
+        glfwTerminate();
 
-in vec3 vColor;
-
-out vec4 FragColor;
-
-void main()
-{
-    FragColor =
-        vec4(vColor, 1.0);
-}
-)";
-#pragma endregion
-
-#pragma region Wireframe
-float cubicleVertices[] =
-{
-    // Bottom square
-
-    -0.5f, 0.0f, -0.5f,
-     0.5f, 0.0f, -0.5f,
-
-     0.5f, 0.0f, -0.5f,
-     0.5f, 0.0f,  0.5f,
-
-     0.5f, 0.0f,  0.5f,
-    -0.5f, 0.0f,  0.5f,
-
-    -0.5f, 0.0f,  0.5f,
-    -0.5f, 0.0f, -0.5f,
-
-    // Top square
-
-    -0.5f, 2.0f, -0.5f,
-     0.5f, 2.0f, -0.5f,
-
-     0.5f, 2.0f, -0.5f,
-     0.5f, 2.0f,  0.5f,
-
-     0.5f, 2.0f,  0.5f,
-    -0.5f, 2.0f,  0.5f,
-
-    -0.5f, 2.0f,  0.5f,
-    -0.5f, 2.0f, -0.5f,
-
-    // Vertical edges
-
-    -0.5f, 0.0f, -0.5f,
-    -0.5f, 2.0f, -0.5f,
-
-     0.5f, 0.0f, -0.5f,
-     0.5f, 2.0f, -0.5f,
-
-     0.5f, 0.0f,  0.5f,
-     0.5f, 2.0f,  0.5f,
-
-    -0.5f, 0.0f,  0.5f,
-    -0.5f, 2.0f,  0.5f
-};
-#pragma endregion
-
-#pragma region ShowerEmitter
-std::vector<float> CreateEmitterCircle()
-{
-    std::vector<float> vertices;
-
-    const int segments = 64;
-
-    const float radius = 0.05f;
-
-    const float centerX = 0.0f;
-    const float centerY = 2.0f;
-    const float centerZ = 0.0f;
-
-    for (int i = 0; i < segments; i++)
-    {
-        float angle =
-            2.0f * 3.1415926f *
-            ((float)i / segments);
-
-        float x =
-            centerX +
-            cos(angle) * radius;
-
-        float z =
-            centerZ +
-            sin(angle) * radius;
-
-        vertices.push_back(x);
-        vertices.push_back(centerY);
-        vertices.push_back(z);
+        return nullptr;
     }
 
-    return vertices;
-}
-#pragma endregion
+    glfwMakeContextCurrent(window);
 
-#pragma region RenderMode
-enum RenderMode
-{
-    TEMPERATURE_MODE,
-    MASS_MODE
-};
-#pragma endregion
+    if (!gladLoadGLLoader(
+        (GLADloadproc)glfwGetProcAddress))
+    {
+        printf("Failed to initialize GLAD\n");
+
+        return nullptr;
+    }
+    
+    printf("OpenGL Loaded\n");
+    return window;
+}
 
 int main()
 {
+    const float gravity = -9.81f;
+    int floorHits = 0;
+
+    float lastTime =
+        (float)glfwGetTime();
+
     //Spawn initial particles
-    const int PARTICLE_COUNT = 50;
-    std::vector<Particle> particles;
-    for (int i = 0; i < PARTICLE_COUNT; i++)
-    {
-        Particle p;
-
-        float radius =
-            0.05f * sqrt(
-                (float)rand() / RAND_MAX);
-
-        float angle =
-            2.0f * 3.1415926f *
-            ((float)rand() / RAND_MAX);
-
-        float x =
-            cos(angle) * radius;
-
-        float z =
-            sin(angle) * radius;
-
-        p.position =
-            glm::vec3(x, 2.0f, z);
-
-        //TODO: Randomise velocity vector
-        p.velocity =
-            glm::vec3(0.0f,
-                -1.0f,
-                0.0f);
-
-        p.mass = 1.0f;
-
-        p.temperature = 1.0f;
-
-        particles.push_back(p);
-    }
+    const int PARTICLE_COUNT = 500;
+    std::vector<Particle> particles = Spawn(PARTICLE_COUNT);
 
     // Initial particle verteces
     std::vector<ParticleVertex> particleVertices;
@@ -262,34 +89,9 @@ int main()
     glfwWindowHint(GLFW_OPENGL_PROFILE,
         GLFW_OPENGL_CORE_PROFILE);
 
-    GLFWwindow* window =
-        glfwCreateWindow(
-            1280,
-            720,
-            "Shower Simulation",
-            nullptr,
-            nullptr);
+    GLFWwindow* window = CreateWindow();
+    if (window == nullptr) return -1;
 
-    if (!window)
-    {
-        printf("Window creation failed\n");
-
-        glfwTerminate();
-
-        return -1;
-    }
-
-    glfwMakeContextCurrent(window);
-
-    if (!gladLoadGLLoader(
-        (GLADloadproc)glfwGetProcAddress))
-    {
-        printf("Failed to initialize GLAD\n");
-
-        return -1;
-    }
-
-    printf("OpenGL Loaded\n");
 
     // Shower renderer initialisation/setup
     GLuint vao;
@@ -402,9 +204,18 @@ int main()
     // Render Loop
     while (!glfwWindowShouldClose(window))
     {
+        // Delta time
+        float currentTime =
+            (float)glfwGetTime();
+
+        float dt =
+            currentTime - lastTime;
+
+        lastTime = currentTime;
+
         // Check for keyboard input
         if (glfwGetKey(window,
-            GLFW_KEY_T)
+            GLFW_KEY_1)
             == GLFW_PRESS)
         {
             currentMode =
@@ -412,7 +223,7 @@ int main()
         }
 
         if (glfwGetKey(window,
-            GLFW_KEY_M)
+            GLFW_KEY_2)
             == GLFW_PRESS)
         {
             currentMode =
@@ -505,6 +316,36 @@ int main()
 
         for (auto& p : particles)
         {
+            // Gravity
+            p.velocity.y +=
+                gravity * dt;
+
+            // Integrate position
+            p.position +=
+                p.velocity * dt;
+
+            // Floor collision
+            if (p.position.y <= 0.0f)
+            {
+                p = RespawnParticle();
+
+                floorHits++;
+            }
+
+            // Cooling
+            float coolingFactor = 0.5f;
+
+            p.temperature -=
+                coolingFactor *
+                dt /
+                p.mass;
+
+            p.temperature =
+                glm::clamp(
+                    p.temperature,
+                    0.0f,
+                    1.0f);
+
             ParticleVertex v;
 
             v.position = p.position;
@@ -512,11 +353,17 @@ int main()
             if (currentMode ==
                 TEMPERATURE_MODE)
             {
+                // Different to Rust - easier to see on screen
+                float t = p.temperature;
+
+                glm::vec3 hot =
+                    glm::vec3(1.0f, 0.2f, 0.0f);
+
+                glm::vec3 cold =
+                    glm::vec3(0.5f, 0.8f, 1.0f);
+
                 v.color =
-                    glm::vec3(
-                        p.temperature,
-                        0.0f,
-                        1.0f - p.temperature);
+                    glm::mix(cold, hot, t);
             }
             else
             {
