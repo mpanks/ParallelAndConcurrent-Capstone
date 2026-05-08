@@ -1,6 +1,7 @@
 //#include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 #include "Particle.h"
+#include "Collision.h"
 #include "main.h"
 
 #include <stdio.h>
@@ -203,9 +204,86 @@ int main()
 
     glEnable(GL_PROGRAM_POINT_SIZE);
 
+    // Collision detection grid
+    SpatialGrid grid;
+    grid.cellSize = 0.01;
+
+    grid.nx = (int)(1.0f / grid.cellSize);
+    grid.ny = (int)(2.0f / grid.cellSize);
+    grid.nz = (int)(1.0f / grid.cellSize);
+
+    grid.cells.resize(
+        grid.nx*
+        grid.ny*
+        grid.nz);
+
     // Render Loop
     while (!glfwWindowShouldClose(window))
     {
+        // Clear grid
+        for (auto& cell : grid.cells)
+        {
+            cell.clear();
+        }
+        // Re-populate grid
+        for (int i = 0;
+            i < particles.particles.size();
+            i++)
+        {
+            auto& p = particles.particles[i];
+
+            if (!p.active)
+            {
+                continue;
+            }
+
+            int gx =
+                (int)((p.position.x + 0.5f)
+                    / grid.cellSize);
+
+            int gy =
+                (int)(p.position.y
+                    / grid.cellSize);
+
+            int gz =
+                (int)((p.position.z + 0.5f)
+                    / grid.cellSize);
+
+            if (gx < 0 || gy < 0 || gz < 0)
+            {
+                continue;
+            }
+
+            if (gx >= grid.nx ||
+                gy >= grid.ny ||
+                gz >= grid.nz)
+            {
+                continue;
+            }
+
+            int idx =
+                GridIndex(
+                    grid,
+                    gx,
+                    gy,
+                    gz);
+
+            grid.cells[idx].push_back(i);
+        }
+
+        // Detect collisions
+        auto collisions =
+            DetectCollisions(
+                particles.particles,
+                grid,
+                0,
+                grid.cells.size());
+
+        // Handle collisions
+        for (auto& c : collisions) {
+            MergeParticles(c.a, c.b, particles);
+        }
+
         // Particle spawning
         SpawnSome(particles, 50);
 
