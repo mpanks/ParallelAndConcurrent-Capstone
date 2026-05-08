@@ -148,7 +148,6 @@ DetectCollisions(
                             if (dist2 <
                                 collisionDistance2)
                             {
-                                printf("Collision\n");
                                 collisions.push_back(
                                     {
                                         i,

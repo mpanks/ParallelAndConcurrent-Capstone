@@ -227,7 +227,7 @@ int main()
         }
         // Re-populate grid
         for (int i = 0;
-            i < particles.particles.size();
+            i < PARTICLE_COUNT;
             i++)
         {
             auto& p = particles.particles[i];
@@ -283,11 +283,17 @@ int main()
         auto validCollisions =
             ValidateCollisions(
                 collisions,
-                particles.particles.size());
+                PARTICLE_COUNT);
 
         // Handle collisions
         for (const auto& c : validCollisions)
         {
+            if (!particles.particles[c.a].active ||
+                !particles.particles[c.b].active)
+            {
+                continue;
+            }
+
             MergeParticles(
                 c.a,
                 c.b,
@@ -530,7 +536,7 @@ int main()
 
         glDrawArrays(GL_POINTS,
             0,
-            PARTICLE_COUNT);
+            particleVertices.size());
 
         //Must go last
         glfwSwapBuffers(window);
