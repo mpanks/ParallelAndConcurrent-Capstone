@@ -316,7 +316,7 @@ int main()
             0,
             64);
 
-        // Create particles to draw
+        // Physics
         particleVertices.clear();
 
         for (int i = 0;
@@ -340,6 +340,36 @@ int main()
                 particles.freeIndices.push_back(i);
 
                 floorHits++;
+                continue;
+            }
+
+            // Wall collision
+            if (particles.particles[i].position.x > 0.5f)
+            {
+                particles.particles[i].position.x = 0.5f;
+
+                particles.particles[i].velocity.x *= -1.0f;
+            }
+
+            if (particles.particles[i].position.x < -0.5f)
+            {
+                particles.particles[i].position.x = -0.5f;
+
+                particles.particles[i].velocity.x *= -1.0f;
+            }
+
+            if (particles.particles[i].position.z > 0.5f)
+            {
+                particles.particles[i].position.z = 0.5f;
+
+                particles.particles[i].velocity.z *= -1.0f;
+            }
+
+            if (particles.particles[i].position.z < -0.5f)
+            {
+                particles.particles[i].position.z = -0.5f;
+
+                particles.particles[i].velocity.z *= -1.0f;
             }
 
             // Cooling
