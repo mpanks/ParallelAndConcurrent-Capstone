@@ -57,11 +57,11 @@ int main()
 
     //Spawn initial particles
     const int PARTICLE_COUNT = 500;
-    std::vector<Particle> particles = Spawn(PARTICLE_COUNT);
+    Particles particles = Spawn(PARTICLE_COUNT);
 
     // Initial particle verteces
     std::vector<ParticleVertex> particleVertices;
-    for (auto& p : particles)
+    for (auto& p : particles.particles)
     {
         ParticleVertex v;
 
@@ -201,9 +201,14 @@ int main()
 
     glEnable(GL_DEPTH_TEST);
 
+    glEnable(GL_PROGRAM_POINT_SIZE);
+
     // Render Loop
     while (!glfwWindowShouldClose(window))
     {
+        // Particle spawning
+        SpawnSome(particles, 50);
+
         // Delta time
         float currentTime =
             (float)glfwGetTime();
@@ -314,20 +319,25 @@ int main()
         // Create particles to draw
         particleVertices.clear();
 
-        for (auto& p : particles)
+        for (int i = 0;
+            i < PARTICLE_COUNT;
+            i++)
         {
+            if (!particles.particles[i].active) continue;
             // Gravity
-            p.velocity.y +=
+            particles.particles[i].velocity.y +=
                 gravity * dt;
 
             // Integrate position
-            p.position +=
-                p.velocity * dt;
+            particles.particles[i].position +=
+                particles.particles[i].velocity * dt;
 
             // Floor collision
-            if (p.position.y <= 0.0f)
+            if (particles.particles[i].position.y <= 0.0f)
             {
-                p = RespawnParticle();
+                particles.particles[i].active = false;
+
+                particles.freeIndices.push_back(i);
 
                 floorHits++;
             }
@@ -335,26 +345,26 @@ int main()
             // Cooling
             float coolingFactor = 0.5f;
 
-            p.temperature -=
+            particles.particles[i].temperature -=
                 coolingFactor *
                 dt /
-                p.mass;
+                particles.particles[i].mass;
 
-            p.temperature =
+            particles.particles[i].temperature =
                 glm::clamp(
-                    p.temperature,
+                    particles.particles[i].temperature,
                     0.0f,
                     1.0f);
 
             ParticleVertex v;
 
-            v.position = p.position;
+            v.position = particles.particles[i].position;
 
             if (currentMode ==
                 TEMPERATURE_MODE)
             {
                 // Different to Rust - easier to see on screen
-                float t = p.temperature;
+                float t = particles.particles[i].temperature;
 
                 glm::vec3 hot =
                     glm::vec3(1.0f, 0.2f, 0.0f);
@@ -368,7 +378,7 @@ int main()
             else
             {
                 float normalizedMass =
-                    p.mass / 10.0f;
+                    particles.particles[i].mass / 10.0f;
 
                 v.color =
                     glm::vec3(

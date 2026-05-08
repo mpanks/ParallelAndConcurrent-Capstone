@@ -12,12 +12,12 @@ struct Particle
     float mass;
 
     float temperature;
+
+    bool active;
 };
 
-std::vector<Particle> Spawn(int particleCount);
-
-Particle RespawnParticle(
-    bool randomizeHeight = false);
+void RespawnParticle(
+    Particle& p);
 
 struct ParticleVertex
 {
@@ -25,3 +25,15 @@ struct ParticleVertex
 
     glm::vec3 color;
 };
+
+struct Particles
+{
+    std::vector<Particle> particles;
+    std::vector<int> freeIndices;
+};
+
+Particles Spawn(int particleCount);
+
+void SpawnSome(
+    Particles& particles,
+    int count);

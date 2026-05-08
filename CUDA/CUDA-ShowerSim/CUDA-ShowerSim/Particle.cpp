@@ -3,20 +3,25 @@
 #include <vector>
 #include <cmath>
 
-std::vector<Particle> Spawn(int particleCount) {
+Particles Spawn(int particleCount) {
     std::vector<Particle> particles;
+    std::vector<int> freeIndices;
     for (int i = 0; i < particleCount; i++)
     {
-        particles.push_back(
-            RespawnParticle(true));
+        Particle p{};
+
+        p.active = false;
+
+        particles.push_back(p);
+        freeIndices.push_back(i);
     }
-    return particles;
+    return Particles{ particles, freeIndices };
 }
 
-Particle RespawnParticle(
-    bool randomizeHeight)
+void RespawnParticle(
+    Particle& p)
 {
-    Particle p;
+    //Particle p;
 
     // Emitter configuration
 
@@ -104,9 +109,11 @@ Particle RespawnParticle(
 
     p.temperature = 1.0f;
 
+    p.active = true;
+
     // Startup randomization creates continuous flow
 
-    if (randomizeHeight)
+    /*if (randomizeHeight)
     {
         float life =
             ((float)rand() / RAND_MAX);
@@ -122,7 +129,34 @@ Particle RespawnParticle(
                 1.0f - life,
                 0.0f,
                 1.0f);
-    }
+    }*/
 
-    return p;
+    //return p;
+}
+
+void SpawnSome(
+    Particles& particles,
+    int count)
+{
+    int spawned = 0;
+
+    while (spawned < count &&
+        !particles.freeIndices.empty())
+    {
+        int randomSlot =
+            rand() % particles.freeIndices.size();
+
+        int index =
+            particles.freeIndices[randomSlot];
+
+        particles.freeIndices[randomSlot] =
+            particles.freeIndices.back();
+
+        particles.freeIndices.pop_back();
+
+        RespawnParticle(
+            particles.particles[index]);
+
+        spawned++;
+    }
 }
