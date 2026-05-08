@@ -217,92 +217,22 @@ int main()
         grid.ny*
         grid.nz);
 
+    GLuint uniformColor = glGetUniformLocation(
+            shaderProgram,
+            "uniformColor");
+
+    GLuint mvpLoc =
+        glGetUniformLocation(
+            shaderProgram,
+            "uMVP");
+
+    GLuint useUniformColor = glGetUniformLocation(
+        shaderProgram,
+        "useUniformColor");
+
     // Render Loop
     while (!glfwWindowShouldClose(window))
     {
-        // Clear grid
-        for (auto& cell : grid.cells)
-        {
-            cell.clear();
-        }
-        // Re-populate grid
-        for (int i = 0;
-            i < PARTICLE_COUNT;
-            i++)
-        {
-            auto& p = particles.particles[i];
-
-            if (!p.active)
-            {
-                continue;
-            }
-
-            int gx =
-                (int)((p.position.x + 0.5f)
-                    / grid.cellSize);
-
-            int gy =
-                (int)(p.position.y
-                    / grid.cellSize);
-
-            int gz =
-                (int)((p.position.z + 0.5f)
-                    / grid.cellSize);
-
-            if (gx < 0 || gy < 0 || gz < 0)
-            {
-                continue;
-            }
-
-            if (gx >= grid.nx ||
-                gy >= grid.ny ||
-                gz >= grid.nz)
-            {
-                continue;
-            }
-
-            int idx =
-                GridIndex(
-                    grid,
-                    gx,
-                    gy,
-                    gz);
-
-            grid.cells[idx].push_back(i);
-        }
-
-        // Detect collisions
-        auto collisions =
-            DetectCollisions(
-                particles.particles,
-                grid,
-                0,
-                grid.cells.size());
-
-        // Validate collisions
-        auto validCollisions =
-            ValidateCollisions(
-                collisions,
-                PARTICLE_COUNT);
-
-        // Handle collisions
-        for (const auto& c : validCollisions)
-        {
-            if (!particles.particles[c.a].active ||
-                !particles.particles[c.b].active)
-            {
-                continue;
-            }
-
-            MergeParticles(
-                c.a,
-                c.b,
-                particles);
-        }
-
-        // Particle spawning
-        SpawnSome(particles, 50);
-
         // Delta time
         float currentTime =
             (float)glfwGetTime();
@@ -312,103 +242,8 @@ int main()
 
         lastTime = currentTime;
 
-        // Check for keyboard input
-        if (glfwGetKey(window,
-            GLFW_KEY_1)
-            == GLFW_PRESS)
-        {
-            currentMode =
-                TEMPERATURE_MODE;
-        }
-
-        if (glfwGetKey(window,
-            GLFW_KEY_2)
-            == GLFW_PRESS)
-        {
-            currentMode =
-                MASS_MODE;
-        }
-
-        // Clear first
-        glClearColor(0.1f,
-            0.1f,
-            0.1f,
-            1.0f);
-
-        glClear(GL_COLOR_BUFFER_BIT |
-            GL_DEPTH_BUFFER_BIT);
-
-        glm::mat4 model =
-            glm::mat4(1.0f);
-        // Camera stuff
-        glm::mat4 view =
-            glm::lookAt(
-                glm::vec3(0.0f, 1.0f, 3.0f), // camera position
-                glm::vec3(0.0f, 1.0f, 0.0f), // target
-                glm::vec3(0.0f, 1.0f, 0.0f)  // up vector
-            );
-
-        glm::mat4 projection =
-            glm::perspective(
-                glm::radians(45.0f),
-                1280.0f / 720.0f,
-                0.1f,
-                100.0f);
-
-        glm::mat4 mvp =
-            projection * view * model;
-
-        // Select & bind/apply shaders
-        glUseProgram(shaderProgram);
-
-        GLuint mvpLoc =
-            glGetUniformLocation(
-                shaderProgram,
-                "uMVP");
-
-        glUniformMatrix4fv(
-            mvpLoc,
-            1,
-            GL_FALSE,
-            glm::value_ptr(mvp));
-
-        glBindVertexArray(vao);
-
-        // Set colours for lines
-        glUseProgram(shaderProgram);
-
-        glUniform1i(
-            glGetUniformLocation(
-                shaderProgram,
-                "useUniformColor"),
-            true);
-
-        glUniform3f(
-            glGetUniformLocation(
-                shaderProgram,
-                "uniformColor"),
-            1.0f,
-            1.0f,
-            1.0f);
-
-        // Draw wireframe
-        glDrawArrays(GL_LINES, 0, 24);
-
-        // Set colour for emitter
-        glUniform3f(
-            glGetUniformLocation(
-                shaderProgram,
-                "uniformColor"),
-            0.0f,
-            1.0f,
-            1.0f);
-
-        // Draw emitter
-        glBindVertexArray(emitterVAO);
-
-        glDrawArrays(GL_LINE_LOOP,
-            0,
-            64);
+        // Particle spawning
+        SpawnSome(particles, 50);
 
         // Physics
         particleVertices.clear();
@@ -427,7 +262,7 @@ int main()
                 particles.particles[i].velocity * dt;
 
             // Floor collision
-            if (particles.particles[i].position.y <= 0.0f)
+            if (particles.particles[i].position.y <= 0.0f && particles.particles[i].active)
             {
                 particles.particles[i].active = false;
 
@@ -514,6 +349,173 @@ int main()
             particleVertices.push_back(v);
         }
 
+        // Clear grid
+        for (auto& cell : grid.cells)
+        {
+            cell.clear();
+        }
+        // Re-populate grid
+        for (int i = 0;
+            i < PARTICLE_COUNT;
+            i++)
+        {
+            auto& p = particles.particles[i];
+
+            if (!p.active)
+            {
+                continue;
+            }
+
+            int gx =
+                (int)((p.position.x + 0.5f)
+                    / grid.cellSize);
+
+            int gy =
+                (int)(p.position.y
+                    / grid.cellSize);
+
+            int gz =
+                (int)((p.position.z + 0.5f)
+                    / grid.cellSize);
+
+            if (gx < 0 || gy < 0 || gz < 0)
+            {
+                continue;
+            }
+
+            if (gx >= grid.nx ||
+                gy >= grid.ny ||
+                gz >= grid.nz)
+            {
+                continue;
+            }
+
+            int idx =
+                GridIndex(
+                    grid,
+                    gx,
+                    gy,
+                    gz);
+
+            grid.cells[idx].push_back(i);
+        }
+
+        // Detect collisions
+        auto collisions =
+            DetectCollisions(
+                particles.particles,
+                grid,
+                0,
+                grid.cells.size());
+
+        // Validate collisions
+        auto validCollisions =
+            ValidateCollisions(
+                collisions,
+                PARTICLE_COUNT);
+
+        // Handle collisions
+        for (const auto& c : validCollisions)
+        {
+            if (!particles.particles[c.a].active ||
+                !particles.particles[c.b].active)
+            {
+                continue;
+            }
+
+            MergeParticles(
+                c.a,
+                c.b,
+                particles);
+        }
+
+
+        // Check for keyboard input
+        if (glfwGetKey(window,
+            GLFW_KEY_1)
+            == GLFW_PRESS)
+        {
+            currentMode =
+                TEMPERATURE_MODE;
+        }
+
+        if (glfwGetKey(window,
+            GLFW_KEY_2)
+            == GLFW_PRESS)
+        {
+            currentMode =
+                MASS_MODE;
+        }
+
+        // Clear first
+        glClearColor(0.1f,
+            0.1f,
+            0.1f,
+            1.0f);
+
+        glClear(GL_COLOR_BUFFER_BIT |
+            GL_DEPTH_BUFFER_BIT);
+
+        glm::mat4 model =
+            glm::mat4(1.0f);
+        // Camera stuff
+        glm::mat4 view =
+            glm::lookAt(
+                glm::vec3(0.0f, 1.0f, 3.0f), // camera position
+                glm::vec3(0.0f, 1.0f, 0.0f), // target
+                glm::vec3(0.0f, 1.0f, 0.0f)  // up vector
+            );
+
+        glm::mat4 projection =
+            glm::perspective(
+                glm::radians(45.0f),
+                1280.0f / 720.0f,
+                0.1f,
+                100.0f);
+
+        glm::mat4 mvp =
+            projection * view * model;
+
+        // Select & bind/apply shaders
+        glUseProgram(shaderProgram);
+
+        glUniformMatrix4fv(
+            mvpLoc,
+            1,
+            GL_FALSE,
+            glm::value_ptr(mvp));
+
+        glBindVertexArray(vao);
+
+        // Set colours for lines
+        glUseProgram(shaderProgram);
+
+        glUniform1i(
+            useUniformColor,
+            true);
+
+        glUniform3f(
+            uniformColor,
+            1.0f,
+            1.0f,
+            1.0f);
+
+        // Draw wireframe
+        glDrawArrays(GL_LINES, 0, 24);
+
+        // Set colour for emitter
+        glUniform3f(uniformColor,
+            0.0f,
+            1.0f,
+            1.0f);
+
+        // Draw emitter
+        glBindVertexArray(emitterVAO);
+
+        glDrawArrays(GL_LINE_LOOP,
+            0,
+            64);
+
         glBindBuffer(GL_ARRAY_BUFFER,
             particleVBO);
 
@@ -526,9 +528,7 @@ int main()
 
         // Set particle colours
         glUniform1i(
-            glGetUniformLocation(
-                shaderProgram,
-                "useUniformColor"),
+            useUniformColor,
             false);
 
         // Draw particles
