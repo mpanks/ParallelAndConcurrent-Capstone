@@ -195,3 +195,29 @@ void MergeParticles(
 
     particles.freeIndices.push_back(b);
 }
+
+std::vector<Collision>
+ValidateCollisions(
+    const std::vector<Collision>& collisions,
+    int particleCount)
+{
+    std::vector<Collision> valid;
+
+    std::vector<bool> taken(
+        particleCount,
+        false);
+
+    for (const auto& c : collisions)
+    {
+        if (!taken[c.a] &&
+            !taken[c.b])
+        {
+            taken[c.a] = true;
+            taken[c.b] = true;
+
+            valid.push_back(c);
+        }
+    }
+
+    return valid;
+}

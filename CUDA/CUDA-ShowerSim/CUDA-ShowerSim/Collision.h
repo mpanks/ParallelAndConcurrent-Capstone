@@ -35,3 +35,8 @@ void MergeParticles(
     int a,
     int b,
     Particles& particles);
+
+std::vector<Collision>
+ValidateCollisions(
+    const std::vector<Collision>& collisions,
+    int particleCount);

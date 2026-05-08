@@ -279,9 +279,19 @@ int main()
                 0,
                 grid.cells.size());
 
+        // Validate collisions
+        auto validCollisions =
+            ValidateCollisions(
+                collisions,
+                particles.particles.size());
+
         // Handle collisions
-        for (auto& c : collisions) {
-            MergeParticles(c.a, c.b, particles);
+        for (const auto& c : validCollisions)
+        {
+            MergeParticles(
+                c.a,
+                c.b,
+                particles);
         }
 
         // Particle spawning
