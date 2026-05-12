@@ -214,12 +214,6 @@ void LaunchUpdateParticles(
     int blocks = (count + threadsPerBlock - 1) / threadsPerBlock;
 
     // Allocate memory
-    cudaMemcpy(
-        d_particles,
-        h_particles,
-        sizeof(Particle) * (*particle_count),
-        cudaMemcpyHostToDevice);
-
     UpdateParticles<<<blocks, threadsPerBlock>>>(d_particles, d_states, count, dt, gravity);
 
     // Wait for threads to finish
@@ -234,6 +228,7 @@ void LaunchUpdateParticles(
     }*/
 
     // Get results
+    //TODO: Move rendering to GPU??
     cudaMemcpy(
         h_particles,
         d_particles,

@@ -41,16 +41,22 @@ int main()
     float lastTime =
         (float)glfwGetTime();
 
+    //Spawn initial particles
+    Particles particles = Spawn(PARTICLE_COUNT);
+
     // CUDA Particles
-    Particle* d_particles = new Particle[PARTICLE_COUNT];
+    Particle* d_particles;
 
     cudaMalloc(
         &d_particles,
         PARTICLE_COUNT *
         sizeof(Particle));
 
-    //Spawn initial particles
-    Particles particles = Spawn(PARTICLE_COUNT);
+    cudaMemcpy(
+        d_particles,
+        particles.particles,
+        sizeof(Particle) * PARTICLE_COUNT,
+        cudaMemcpyHostToDevice);
 
     // Initialize cuRAND
     curandState* d_states =
@@ -240,7 +246,7 @@ int main()
         lastTime = currentTime;
 
         // Particle spawning
-        SpawnSome(particles.particles, particles.freeIndices, particles.freeCount, 50);
+        // SpawnSome(particles.particles, particles.freeIndices, particles.freeCount, 50);
 
         // Physics - CPU
         /*particleVertices.clear();

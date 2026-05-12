@@ -7,10 +7,7 @@ Particles Spawn(int particleCount) {
     {
         Particle p{};
 
-        p.active = false;
-
-        particles[i] = p;
-        freeIndices[i] = i;
+		RespawnParticle(p);
     }
     return Particles{ particles, freeIndices, particleCount };
 }
