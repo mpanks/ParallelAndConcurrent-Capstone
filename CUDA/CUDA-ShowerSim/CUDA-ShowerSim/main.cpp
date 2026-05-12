@@ -362,9 +362,6 @@ int main()
             dt,
             gravity,
             &PARTICLE_COUNT);
-		// Copy back to host
-		// particles.particles = std::vector<Particle>(d_particles, d_particles + PARTICLE_COUNT);
-		// particles.particles = d_particles;
 
         // Create particle vertices
         particleVertices.clear();
@@ -378,10 +375,20 @@ int main()
 
             v.position = particles.particles[i].position;
 
-            // Set color (same logic as before)
             float t = particles.particles[i].temperature;
 
-            v.color = float3{t, 1.0f - t, 0.0f};
+            if (currentMode == TEMPERATURE_MODE) {
+                v.color = float3{ t, 0.0f, 1.0f - t };
+            }
+            else {
+                float normalizedMass =
+                    particles.particles[i].mass / 10.0f;
+                v.color =
+                    float3{
+                        normalizedMass,
+                        1.0f - normalizedMass,
+                        0.0f };
+            }
 
             particleVertices.push_back(v);
         }

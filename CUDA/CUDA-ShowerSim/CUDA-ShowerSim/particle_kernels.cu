@@ -30,13 +30,12 @@ curandState* LaunchInitCurandStates(
         &d_states,
         particleCount * sizeof(curandState));
 
-    InitCurandStates << <blocks, threadsPerBlock >> > (
+    InitCurandStates <<<blocks, threadsPerBlock>>> (
         d_states,
         time(NULL),
         particleCount);
 
-    cudaError_t err =
-        cudaDeviceSynchronize();
+    cudaError_t err = cudaDeviceSynchronize();
 
     if (err != cudaSuccess)
     {
@@ -107,9 +106,8 @@ __device__ void Kernel_RespawnParticle(
     p.velocity = make_float3(xVel, yVel, zVel);
 
     // Thermodynamics
-   /* p.mass = 1.0f;
+    p.mass = 1.0f;
     p.temperature = 1.0f;
-    p.active = true;*/
 }
 
 __global__ void UpdateParticles(
@@ -154,9 +152,8 @@ __global__ void UpdateParticles(
         p.velocity.z * dt;
 
     // Cooling
-
     p.temperature -=
-        0.5f * dt / p.mass;
+        2.0f * dt / p.mass;
 
     if (p.temperature < 0.0f)
     {
@@ -164,17 +161,17 @@ __global__ void UpdateParticles(
     }
 
     // Floor collision
-
     if (p.position.y <= 0.0f)
     {
-        curandState localState = d_states[i];
         // Instantly respawn particle
-		Kernel_RespawnParticle(&p, &localState);
-		d_states[i] = localState;
+        curandState localState = d_states[i];
+
+        Kernel_RespawnParticle(&p, &localState);
+
+        d_states[i] = localState;
     }
 
     // Wall collisions
-
     if (p.position.x > 0.5f)
     {
         p.position.x = 0.5f;
@@ -216,9 +213,6 @@ void LaunchUpdateParticles(
     int threadsPerBlock = 256;
     int blocks = (count + threadsPerBlock - 1) / threadsPerBlock;
 
-    //curandState* d_states = h_states;
-	cudaMalloc(&d_states, (*particle_count) * sizeof(curandState));
-
     // Allocate memory
     cudaMemcpy(
         d_particles,
@@ -231,13 +225,13 @@ void LaunchUpdateParticles(
     // Wait for threads to finish
     cudaError err = cudaDeviceSynchronize();
 
-    if (err != cudaSuccess)
+    /*if (err != cudaSuccess)
     {
         fprintf(stderr, "CUDA error: %s\n", cudaGetErrorString(err));
     }
     else {
         printf("CUDA success\n");
-    }
+    }*/
 
     // Get results
     cudaMemcpy(
