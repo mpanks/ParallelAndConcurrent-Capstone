@@ -1,13 +1,12 @@
 #pragma once
 
-#include <glm/glm.hpp>
-#include <vector>
-
+#include <stdlib.h>
+#include <cmath>
+#include<vector_types.h>
 struct Particle
 {
-    glm::vec3 position;
-
-    glm::vec3 velocity;
+    float3 position;
+    float3 velocity;
 
     float mass;
 
@@ -21,19 +20,22 @@ void RespawnParticle(
 
 struct ParticleVertex
 {
-    glm::vec3 position;
+    float3 position;
 
-    glm::vec3 color;
+    float3 color;
 };
 
 struct Particles
 {
-    std::vector<Particle> particles;
-    std::vector<int> freeIndices;
+    Particle* particles;     // size = PARTICLE_COUNT
+    int* freeIndices;        // size = PARTICLE_COUNT
+    int freeCount;           // number of available indices
 };
 
 Particles Spawn(int particleCount);
 
 void SpawnSome(
-    Particles& particles,
+    Particle* particles,
+    int* freeIndices,
+    int& freeCount,
     int count);

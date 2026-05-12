@@ -14,7 +14,7 @@ int GridIndex(
 
 std::vector<Collision>
 DetectCollisions(
-    const std::vector<Particle>& particles,
+    const Particle* particles,
     const SpatialGrid& grid,
     int startIdx,
     int endIdx)
@@ -139,8 +139,10 @@ DetectCollisions(
                             }*/
 
                             glm::vec3 delta =
-                                particles[i].position -
-                                particles[j].position;
+                            glm::vec3( 
+                                particles[i].position.x - particles[j].position.x,
+                                particles[i].position.y - particles[j].position.y,
+                                particles[i].position.z - particles[j].position.z);
 
                             float dist2 =
                                 glm::dot(delta, delta);
@@ -178,10 +180,17 @@ void MergeParticles(
     float mNew =
         m0 + m1;
 
-    pa.velocity =
-        (m0 * pa.velocity +
-            m1 * pb.velocity)
-        / mNew;
+    pa.velocity.x =
+        (m0 * pa.velocity.x +
+            m1 * pb.velocity.x) / mNew;
+
+    pa.velocity.y =
+        (m0 * pa.velocity.y +
+            m1 * pb.velocity.y) / mNew;
+
+    pa.velocity.z =
+        (m0 * pa.velocity.z +
+            m1 * pb.velocity.z) / mNew;
 
     pa.mass = mNew;
 
@@ -192,7 +201,8 @@ void MergeParticles(
 
     pb.active = false;
 
-    particles.freeIndices.push_back(b);
+    particles.freeIndices[particles.freeCount] = b;
+    particles.freeCount++;
 }
 
 std::vector<Collision>

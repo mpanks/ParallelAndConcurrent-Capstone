@@ -1,4 +1,12 @@
 #pragma once
+#include "cuda_runtime.h"
+#include "device_launch_parameters.h"
+#include "Particle.h"
+#include "Collision.h"
+#include "particle_kernels.h"
+
+#include <stdio.h>
+
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
@@ -6,7 +14,8 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-#include<vector>
+#include <vector>
+#include <cmath>
 
 #pragma region Shaders
 

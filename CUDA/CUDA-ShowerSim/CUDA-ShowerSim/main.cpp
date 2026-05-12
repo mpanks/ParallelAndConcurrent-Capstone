@@ -1,20 +1,4 @@
-//#include "cuda_runtime.h"
-#include "device_launch_parameters.h"
-#include "Particle.h"
-#include "Collision.h"
 #include "main.h"
-
-#include <stdio.h>
-
-#include <glad/glad.h>
-#include <GLFW/glfw3.h>
-
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtc/type_ptr.hpp>
-
-#include <vector>
-#include <cmath>
 
 GLFWwindow* CreateWindow() {
     GLFWwindow* window =
@@ -50,26 +34,39 @@ GLFWwindow* CreateWindow() {
 
 int main()
 {
+    const int PARTICLE_COUNT = 500;
     const float gravity = -9.81f;
     int floorHits = 0;
 
     float lastTime =
         (float)glfwGetTime();
 
+    // CUDA Particles
+    Particle* d_particles = new Particle[PARTICLE_COUNT];
+
+    cudaMalloc(
+        &d_particles,
+        PARTICLE_COUNT *
+        sizeof(Particle));
+
     //Spawn initial particles
-    const int PARTICLE_COUNT = 500;
     Particles particles = Spawn(PARTICLE_COUNT);
+
+    // Initialize cuRAND
+    curandState* d_states =
+        LaunchInitCurandStates(
+            PARTICLE_COUNT);
 
     // Initial particle verteces
     std::vector<ParticleVertex> particleVertices;
-    for (auto& p : particles.particles)
+    for (int i = 0; i < PARTICLE_COUNT; i++)
     {
         ParticleVertex v;
 
-        v.position = p.position;
+        v.position = particles.particles[i].position;
 
         v.color =
-            glm::vec3(1.0f, 0.0f, 0.0f);
+            float3{ 1.0f, 0.0f, 0.0f };
 
         particleVertices.push_back(v);
     }
@@ -206,7 +203,7 @@ int main()
 
     // Collision detection grid
     SpatialGrid grid;
-    grid.cellSize = 0.01;
+    grid.cellSize = 0.01f;
 
     grid.nx = (int)(1.0f / grid.cellSize);
     grid.ny = (int)(2.0f / grid.cellSize);
@@ -243,10 +240,10 @@ int main()
         lastTime = currentTime;
 
         // Particle spawning
-        SpawnSome(particles, 50);
+        SpawnSome(particles.particles, particles.freeIndices, particles.freeCount, 50);
 
-        // Physics
-        particleVertices.clear();
+        // Physics - CPU
+        /*particleVertices.clear();
 
         for (int i = 0;
             i < PARTICLE_COUNT;
@@ -258,8 +255,14 @@ int main()
                 gravity * dt;
 
             // Integrate position
-            particles.particles[i].position +=
-                particles.particles[i].velocity * dt;
+            particles.particles[i].position.x +=
+                particles.particles[i].velocity.x * dt;
+
+            particles.particles[i].position.y +=
+                particles.particles[i].velocity.y * dt;
+
+            particles.particles[i].position.z +=
+                particles.particles[i].velocity.z * dt;
 
             // Floor collision
             if (particles.particles[i].position.y <= 0.0f && particles.particles[i].active)
@@ -345,6 +348,40 @@ int main()
                         1.0f - normalizedMass,
                         0.0f);
             }
+
+            particleVertices.push_back(v);
+        }*/
+        // Physics - CUDA
+
+        // Launch threads
+        LaunchUpdateParticles(
+            d_particles,
+			particles.particles,
+			d_states,
+            PARTICLE_COUNT,
+            dt,
+            gravity,
+            &PARTICLE_COUNT);
+		// Copy back to host
+		// particles.particles = std::vector<Particle>(d_particles, d_particles + PARTICLE_COUNT);
+		// particles.particles = d_particles;
+
+        // Create particle vertices
+        particleVertices.clear();
+
+        for (int i = 0; i < PARTICLE_COUNT; i++)
+        {
+            if (!particles.particles[i].active)
+                continue;
+
+            ParticleVertex v;
+
+            v.position = particles.particles[i].position;
+
+            // Set color (same logic as before)
+            float t = particles.particles[i].temperature;
+
+            v.color = float3{t, 1.0f - t, 0.0f};
 
             particleVertices.push_back(v);
         }

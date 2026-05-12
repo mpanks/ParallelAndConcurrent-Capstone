@@ -48,6 +48,9 @@
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;WIN64;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>external\glm;external\include;external\glfw\glfw-3.4.bin.WIN64\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalOptions>
+      </AdditionalOptions>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -57,8 +60,10 @@
     </Link>
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
-      <Include>external/glfw/glfw-3.4.bin.WIN64/lib-vc2022;external/glad/include;external/glm;CUDA/include;%(Include)</Include>
-      <CodeGeneration>compute_86,sm_86;%(CodeGeneration)</CodeGeneration>
+      <Include>external/glfw/glfw-3.4.bin.WIN64/lib-vc2022;external/include;external/glm;CUDA/include;%(Include)</Include>
+      <CodeGeneration>compute_86,sm_86</CodeGeneration>
+      <AdditionalCompilerOptions>/std:c++17</AdditionalCompilerOptions>
+      <AdditionalOptions>-std=c++17 %(AdditionalOptions)</AdditionalOptions>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -81,19 +86,27 @@
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <CudaCompile Include="kernel.cu" />
+    <CudaCompile Include="particle_kernels.cu">
+      <AdditionalCompilerOptions Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      </AdditionalCompilerOptions>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      </ExcludedFromBuild>
+    </CudaCompile>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Collision.cpp" />
     <ClCompile Include="external\src\glad.c" />
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="Particle.cpp" />
+    <CudaCompile Include="Particle.cu">
+      <FileType>CppCode</FileType>
+    </CudaCompile>
     <ClCompile Include="Renderer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Collision.h" />
     <ClInclude Include="main.h" />
     <ClInclude Include="Particle.h" />
+    <ClInclude Include="particle_kernels.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

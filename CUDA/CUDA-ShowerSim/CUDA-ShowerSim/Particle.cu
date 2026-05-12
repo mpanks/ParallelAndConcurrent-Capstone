@@ -1,21 +1,18 @@
 #include "Particle.h"
-#include <glm/glm.hpp>
-#include <vector>
-#include <cmath>
 
 Particles Spawn(int particleCount) {
-    std::vector<Particle> particles;
-    std::vector<int> freeIndices;
+    Particle* particles = new Particle[particleCount];
+    int* freeIndices = new int[particleCount];
     for (int i = 0; i < particleCount; i++)
     {
         Particle p{};
 
         p.active = false;
 
-        particles.push_back(p);
-        freeIndices.push_back(i);
+        particles[i] = p;
+        freeIndices[i] = i;
     }
-    return Particles{ particles, freeIndices };
+    return Particles{ particles, freeIndices, particleCount };
 }
 
 void RespawnParticle(
@@ -50,7 +47,7 @@ void RespawnParticle(
     float y = centreY;
 
     p.position =
-        glm::vec3(x, y, z);
+        float3{ x, y, z };
 
     // Random emission direction independent of spawn position
 
@@ -60,9 +57,9 @@ void RespawnParticle(
         * 3.1415926f;
 
     float elevation =
-        glm::radians(
-            ((float)rand() / RAND_MAX)
-            * 30.0f);
+        (((float)rand() / (float)RAND_MAX)
+            * 30.0f)
+        * (3.14159265358979323846f / 180.0f);
 
     // Initial speed randomization
 
@@ -98,10 +95,10 @@ void RespawnParticle(
         sin(azimuth);
 
     p.velocity =
-        glm::vec3(
+        float3{
             xVel,
             yVel,
-            zVel);
+            zVel };
 
     // Thermodynamics
 
@@ -135,27 +132,32 @@ void RespawnParticle(
 }
 
 void SpawnSome(
-    Particles& particles,
+    Particle* particles,
+    int* freeIndices,
+    int& freeCount,
     int count)
 {
     int spawned = 0;
 
-    while (spawned < count &&
-        !particles.freeIndices.empty())
+    while (spawned < count && freeCount > 0)
     {
+        // Random slot in free list
         int randomSlot =
-            rand() % particles.freeIndices.size();
+            rand() % freeCount;
 
+        // Get index
         int index =
-            particles.freeIndices[randomSlot];
+            freeIndices[randomSlot];
 
-        particles.freeIndices[randomSlot] =
-            particles.freeIndices.back();
+        // Remove it using swap-with-last
+        freeIndices[randomSlot] =
+            freeIndices[freeCount - 1];
 
-        particles.freeIndices.pop_back();
+        freeCount--;
 
+        // Respawn particle
         RespawnParticle(
-            particles.particles[index]);
+            particles[index]);
 
         spawned++;
     }

@@ -1,5 +1,10 @@
 #pragma once
 #include <vector>
+
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+
 #include "Particle.h"
 struct Collision
 {
@@ -26,7 +31,7 @@ int GridIndex(
 
 std::vector<Collision>
 DetectCollisions(
-    const std::vector<Particle>& particles,
+    const Particle* particles,
     const SpatialGrid& grid,
     int startIdx,
     int endIdx);
