@@ -4,62 +4,73 @@
 #include "curand_kernel.h"
 #include "Collision.h"
 
-__global__ void AssignParticlesToCells(
-    Particle* particles,
-    int* cellStart,
-    int* cellCount,
-    int* particleCell,
-    float cellSize,
-    int nx, int ny, int nz,
-    int* particleCount);
+//void CreateGridCUDA(
+//    Particle* particles,
+//    int* cellStart,
+//    int* cellCount,
+//    int* particleCell,
+//    float cellSize,
+//    int nx, int ny, int nz,
+//    int h_particleCount,
+//    int* d_particleCount);
+//
+//void OrderGridCUDA(
+//    Particle* particles,
+//    Particle* sortedParticles,
+//    int* cellStart,
+//    int* cellCount,
+//    int* particleCell,
+//    int h_particleCount,
+//    int* d_particleCount,
+//    int totalCells);
 
-void CreateGridCUDA(
+void BuildGridCountCuda(
     Particle* particles,
-    int* cellStart,
-    int* cellCount,
-    int* particleCell,
-    float cellSize,
-    int nx, int ny, int nz,
+    int* cellCounts,
+    int h_nx,
+    int h_ny,
+    int h_nz,
+    int* d_nx,
+    int* d_ny,
+    int* d_nz,
+    float* d_cellSize,
     int h_particleCount,
     int* d_particleCount);
 
-__global__ void ReorderParticles(
-    Particle* particles,
-    Particle* sortedParticles,
-    int* cellStart,
-    int* cellOffset,
-    int* particleCell,
-    int* particleCount);
-
-void OrderGridCUDA(
-    Particle* particles,
-    Particle* sortedParticles,
-    int* cellStart,
-    int* cellCount,
-    int* particleCell,
-    int h_particleCount,
-    int* d_particleCount,
+void ComputeOffsets(
+    int* d_cellCounts,
+    int* d_cellOffsets,
     int totalCells);
 
-__global__ void DetectCollisionsGPU(
+void BuildGridCUDA(
     Particle* particles,
-    int* cellStart,
-    int* cellCount,
-    int nx, int ny, int nz,
-    float collisionDistance2,
-    int particleCount,
-    int* collisionFlags);
+    int* cellOffsets,
+    int* cellWriteOffsets,
+    int* cellParticleIndices,
+    int h_nx,
+    int h_ny,
+    int h_nz,
+    int* d_nx,
+    int* d_ny,
+    int* d_nz,
+    float* d_cellSize,
+    int h_particleCount,
+    int* d_particleCount);
+
+void ComputeEndsCUDA(
+    int* offsets,
+    int* ends,
+    int totalCells);
 
 void DetectCollisionsCUDA(
     Particle* particles,
-    int* cellStart,
-    int* cellCount,
-    int nx, int ny, int nz,
-    float collisionDistance2,
-    int* d_particleCount,
-    int* d_collisionFlags);
-
-__global__ void ResolveCollisions(
-    Particle* particles,
+    int* cellOffsets,
+    int* cellEnds,
+    int* nx,
+    int* ny,
+    int* nz,
+    int* cellParticleIndices,
+    float* cellSize,
     Collision* collisions,
-    int collisionCount);
+    int* collisionCount,
+    int totalCells);

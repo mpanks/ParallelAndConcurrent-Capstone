@@ -115,48 +115,9 @@ __global__ void UpdateParticles(
 
     // Floor collision / respawn: operate directly on global state
     if (p.position.y <= 0.0f) {
-        // Emitter configuration
-        const float centreY = 2.0f;
-        const float radius = 0.05f;
-
-        // Random values
-        float u1 = curand_uniform(&states[i]);
-        float u2 = curand_uniform(&states[i]);
-        float u3 = curand_uniform(&states[i]);
-        float u4 = curand_uniform(&states[i]);
-        float u5 = curand_uniform(&states[i]);
-        float u6 = curand_uniform(&states[i]);
-
-        // Uniform disc sampling
-        float theta = u1 * 2.0f * 3.1415926f;
-        float r = sqrtf(u2) * radius;
-
-        float x = r * cosf(theta);
-        float z = r * sinf(theta);
-        float y = centreY;
-
-        p.position = make_float3(x, y, z);
-
-        // Emission direction
-        float azimuth = u3 * 2.0f * 3.1415926f;
-        float elevation = u4 * 30.0f * (3.14159265358979323846f / 180.0f);
-
-        const float INITIAL_VEL_MIN = 1.5f;
-        const float INITIAL_VEL_MAX = 3.0f;
-
-        float initialVel = INITIAL_VEL_MIN + u5 * (INITIAL_VEL_MAX - INITIAL_VEL_MIN);
-        float speed = initialVel * (0.95f + u6 * 0.10f);
-
-        float xVel = speed * sinf(elevation) * cosf(azimuth);
-        float yVel = -speed * cosf(elevation);
-        float zVel = speed * sinf(elevation) * sinf(azimuth);
-
-        p.velocity = make_float3(xVel, yVel, zVel);
-
-        // Thermodynamics
-        p.mass = 1.0f;
-        p.temperature = 1.0f;
-        p.active = true;
+		curandState_t* state = &states[i];
+		Kernel_RespawnParticle(p, state);
+		states[i] = *state;
     }
 
     // Wall collisions

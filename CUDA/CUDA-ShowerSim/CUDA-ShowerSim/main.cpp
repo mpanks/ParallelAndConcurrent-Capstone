@@ -85,10 +85,11 @@ int main()
         d_particleCount);
 
     // Collision detection grid
-    Particle* d_sortedParticles = nullptr;
+    /*Particle* d_sortedParticles = nullptr;
     cudaMalloc(
         &d_sortedParticles,
-		PARTICLE_COUNT * sizeof(Particle));
+		PARTICLE_COUNT * sizeof(Particle));*/
+
     SpatialGrid grid;
     grid.cellSize = 0.01f;
 
@@ -103,11 +104,52 @@ int main()
 
     // CUDA spatial grid
     int totalCells = grid.nx * grid.ny * grid.nz;
+	int* d_nx = nullptr;
+	int* d_ny = nullptr;
+	int* d_nz = nullptr;
+	float* d_cellSize = nullptr;
+
+	cudaMalloc(&d_nx, sizeof(int));
+	cudaMalloc(&d_ny, sizeof(int));
+	cudaMalloc(&d_nz, sizeof(int));
+	cudaMalloc(&d_cellSize, sizeof(float));
+
+	cudaMemcpy(d_nx, &grid.nx, sizeof(int), cudaMemcpyHostToDevice);
+	cudaMemcpy(d_ny, &grid.ny, sizeof(int), cudaMemcpyHostToDevice);
+	cudaMemcpy(d_nz, &grid.nz, sizeof(int), cudaMemcpyHostToDevice);
+	cudaMemcpy(d_cellSize, &grid.cellSize, sizeof(float), cudaMemcpyHostToDevice);
 
     // One counter per cell
     int* d_cellCounts = nullptr;
-    cudaMalloc(&d_cellCounts, totalCells * sizeof(int));
+    int* d_cellParticleIndices = nullptr;
+    int* d_cellOffsets = nullptr;
+    int* d_cellWriteOffsets = nullptr;
+    int* d_cellEnds = nullptr;
 
+    cudaMalloc(&d_cellCounts,
+        totalCells * sizeof(int));
+
+    cudaMalloc(&d_cellParticleIndices,
+        PARTICLE_COUNT * sizeof(int));
+
+    cudaMalloc(&d_cellOffsets,
+        totalCells * sizeof(int));
+
+    cudaMalloc(&d_cellWriteOffsets,
+        totalCells * sizeof(int));
+
+    cudaMalloc(&d_cellEnds, totalCells * sizeof(int));
+
+    // Collision buffer
+	Collision* d_collisions = nullptr;
+	int* d_collisionCount = nullptr;
+
+    cudaMalloc(&d_collisions,
+        PARTICLE_COUNT *
+		sizeof(Collision));
+
+    cudaMalloc(&d_collisionCount,
+        sizeof(int));
     // Optional: prefix sum buffer
     int* d_cellStart;
     cudaMalloc(&d_cellStart, totalCells * sizeof(int));
@@ -420,14 +462,6 @@ int main()
             fprintf(stderr, "cudaMemcpy D2H failed: %s\n", cudaGetErrorString(copyErr));
         }
 
-        //// Sync copy
-        //cudaError_t syncErr = cudaDeviceSynchronize();
-        //if (syncErr != cudaSuccess)
-        //{
-        //    printf("Kernel execution error: %s\n",
-        //        cudaGetErrorString(syncErr));
-        //}
-
         // Create particle vertices
         particleVertices.clear();
 
@@ -511,26 +545,48 @@ int main()
         }*/
 
         // GPU Grid
-        CreateGridCUDA(
+        BuildGridCountCuda(
             d_particles,
-            d_cellStart,
             d_cellCounts,
-            d_particleCell,
-            grid.cellSize,
             grid.nx,
             grid.ny,
             grid.nz,
+            d_nx,
+            d_ny,
+            d_nz,
+            d_cellSize,
             PARTICLE_COUNT,
             d_particleCount);
 
-        OrderGridCUDA(
-            d_particles,
-            d_sortedParticles,
-            d_cellStart,
+        ComputeOffsets(
             d_cellCounts,
-            d_particleCell,
+            d_cellOffsets,
+            totalCells);
+
+        cudaMemcpy(d_cellWriteOffsets,
+            d_cellOffsets,
+            totalCells * sizeof(int),
+            cudaMemcpyDeviceToDevice);
+
+        BuildGridCUDA(
+            d_particles,
+            d_cellOffsets,
+            d_cellWriteOffsets,
+            d_cellParticleIndices,
+            grid.nx,
+            grid.ny,
+            grid.nz,
+            d_nx,
+            d_ny,
+            d_nz,
+            d_cellSize,
             PARTICLE_COUNT,
-            d_particleCount,
+			d_particleCount);
+
+        // Compute ends
+        ComputeEndsCUDA(
+            d_cellOffsets,
+            d_cellEnds,
             totalCells);
 
         // Detect collisions - CPU
@@ -541,16 +597,18 @@ int main()
                 0,
                 grid.cells.size());*/
 		// Detect collisions - GPU
-
         DetectCollisionsCUDA(
-            d_sortedParticles,
-            d_cellStart,
-            d_cellCounts,
-            grid.nx,
-            grid.ny,
-            grid.nz,
-            0.1f,
-			d_particleCount);
+            d_particles,
+            d_cellOffsets,
+            d_cellEnds,
+            d_nx,
+            d_ny,
+            d_nz,
+			d_cellParticleIndices,
+			d_cellSize,
+            d_collisions,
+			d_collisionCount,
+            totalCells);
 
         // Validate collisions - CPU
         /*auto validCollisions =
