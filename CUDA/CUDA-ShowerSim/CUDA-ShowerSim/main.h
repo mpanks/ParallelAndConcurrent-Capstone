@@ -3,9 +3,12 @@
 #include "device_launch_parameters.h"
 #include "Particle.h"
 #include "Collision.h"
-#include "particle_kernels.h"
+
+#include "particle_kernels.cuh"
+#include "collision_kernels.cuh"
 
 #include <stdio.h>
+#include <curand_kernel.h>
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>

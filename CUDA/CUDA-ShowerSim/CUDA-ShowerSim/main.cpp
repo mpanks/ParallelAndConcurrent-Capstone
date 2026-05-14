@@ -34,7 +34,20 @@ GLFWwindow* CreateWindow() {
 
 int main()
 {
-    const int PARTICLE_COUNT = 500;
+	cudaSetDevice(0);
+    const int PARTICLE_COUNT = 10000;
+	int* d_particleCount = nullptr;
+
+    cudaMalloc(
+        &d_particleCount,
+		sizeof(int));
+
+    cudaMemcpy(
+        d_particleCount,
+        &PARTICLE_COUNT,
+        sizeof(int),
+		cudaMemcpyHostToDevice);
+
     const float gravity = -9.81f;
     int floorHits = 0;
 
@@ -42,10 +55,11 @@ int main()
         (float)glfwGetTime();
 
     //Spawn initial particles
-    Particles particles = Spawn(PARTICLE_COUNT);
+    Particle* particles = Spawn(PARTICLE_COUNT);
+    printf("debug: sizeof(Particle) = %zu\n", sizeof(Particle));
 
     // CUDA Particles
-    Particle* d_particles;
+    Particle* d_particles = nullptr;
 
     cudaMalloc(
         &d_particles,
@@ -54,22 +68,62 @@ int main()
 
     cudaMemcpy(
         d_particles,
-        particles.particles,
+        particles,
         sizeof(Particle) * PARTICLE_COUNT,
         cudaMemcpyHostToDevice);
 
     // Initialize cuRAND
-    curandState* d_states =
-        LaunchInitCurandStates(
-            PARTICLE_COUNT);
+    curandState* d_states = nullptr;
+
+    cudaMalloc(
+        &d_states,
+        PARTICLE_COUNT * sizeof(curandState));
+
+    LaunchInitCurandStates(
+        d_states,
+        PARTICLE_COUNT,
+        d_particleCount);
+
+    // Collision detection grid
+    Particle* d_sortedParticles = nullptr;
+    cudaMalloc(
+        &d_sortedParticles,
+		PARTICLE_COUNT * sizeof(Particle));
+    SpatialGrid grid;
+    grid.cellSize = 0.01f;
+
+    grid.nx = (int)(1.0f / grid.cellSize);
+    grid.ny = (int)(2.0f / grid.cellSize);
+    grid.nz = (int)(1.0f / grid.cellSize);
+
+    grid.cells.resize(
+        grid.nx *
+        grid.ny *
+        grid.nz);
+
+    // CUDA spatial grid
+    int totalCells = grid.nx * grid.ny * grid.nz;
+
+    // One counter per cell
+    int* d_cellCounts = nullptr;
+    cudaMalloc(&d_cellCounts, totalCells * sizeof(int));
+
+    // Optional: prefix sum buffer
+    int* d_cellStart;
+    cudaMalloc(&d_cellStart, totalCells * sizeof(int));
+
+    // Flat particle index buffer
+    int* d_particleCell;
+    cudaMalloc(&d_particleCell, PARTICLE_COUNT * sizeof(int));
 
     // Initial particle verteces
     std::vector<ParticleVertex> particleVertices;
+    particleVertices.reserve(PARTICLE_COUNT);
     for (int i = 0; i < PARTICLE_COUNT; i++)
     {
         ParticleVertex v;
 
-        v.position = particles.particles[i].position;
+        v.position = particles[i].position;
 
         v.color =
             float3{ 1.0f, 0.0f, 0.0f };
@@ -206,19 +260,6 @@ int main()
     glEnable(GL_DEPTH_TEST);
 
     glEnable(GL_PROGRAM_POINT_SIZE);
-
-    // Collision detection grid
-    SpatialGrid grid;
-    grid.cellSize = 0.01f;
-
-    grid.nx = (int)(1.0f / grid.cellSize);
-    grid.ny = (int)(2.0f / grid.cellSize);
-    grid.nz = (int)(1.0f / grid.cellSize);
-
-    grid.cells.resize(
-        grid.nx*
-        grid.ny*
-        grid.nz);
 
     GLuint uniformColor = glGetUniformLocation(
             shaderProgram,
@@ -362,33 +403,51 @@ int main()
         // Launch threads
         LaunchUpdateParticles(
             d_particles,
-			particles.particles,
 			d_states,
-            PARTICLE_COUNT,
             dt,
             gravity,
-            &PARTICLE_COUNT);
+            PARTICLE_COUNT,
+            d_particleCount);
+
+        // Get results
+        //TODO: Move rendering to GPU??
+        cudaError_t copyErr = cudaMemcpy(
+            particles,    // or pinned buffer (see below)
+            d_particles,
+            sizeof(Particle) * PARTICLE_COUNT,
+            cudaMemcpyDeviceToHost);
+        if (copyErr != cudaSuccess) {
+            fprintf(stderr, "cudaMemcpy D2H failed: %s\n", cudaGetErrorString(copyErr));
+        }
+
+        //// Sync copy
+        //cudaError_t syncErr = cudaDeviceSynchronize();
+        //if (syncErr != cudaSuccess)
+        //{
+        //    printf("Kernel execution error: %s\n",
+        //        cudaGetErrorString(syncErr));
+        //}
 
         // Create particle vertices
         particleVertices.clear();
 
         for (int i = 0; i < PARTICLE_COUNT; i++)
         {
-            if (!particles.particles[i].active)
+            if (!particles[i].active)
                 continue;
 
             ParticleVertex v;
 
-            v.position = particles.particles[i].position;
+            v.position = particles[i].position;
 
-            float t = particles.particles[i].temperature;
+            float t = particles[i].temperature;
 
             if (currentMode == TEMPERATURE_MODE) {
                 v.color = float3{ t, 0.0f, 1.0f - t };
             }
             else {
                 float normalizedMass =
-                    particles.particles[i].mass / 10.0f;
+                    particles[i].mass / 10.0f;
                 v.color =
                     float3{
                         normalizedMass,
@@ -398,7 +457,8 @@ int main()
 
             particleVertices.push_back(v);
         }
-
+        // CPU Grid
+        /*
         // Clear grid
         for (auto& cell : grid.cells)
         {
@@ -409,7 +469,7 @@ int main()
             i < PARTICLE_COUNT;
             i++)
         {
-            auto& p = particles.particles[i];
+            auto& p = particles[i];
 
             if (!p.active)
             {
@@ -448,18 +508,52 @@ int main()
                     gz);
 
             grid.cells[idx].push_back(i);
-        }
+        }*/
 
-        // Detect collisions
-        auto collisions =
+        // GPU Grid
+        CreateGridCUDA(
+            d_particles,
+            d_cellStart,
+            d_cellCounts,
+            d_particleCell,
+            grid.cellSize,
+            grid.nx,
+            grid.ny,
+            grid.nz,
+            PARTICLE_COUNT,
+            d_particleCount);
+
+        OrderGridCUDA(
+            d_particles,
+            d_sortedParticles,
+            d_cellStart,
+            d_cellCounts,
+            d_particleCell,
+            PARTICLE_COUNT,
+            d_particleCount,
+            totalCells);
+
+        // Detect collisions - CPU
+        /*auto collisions =
             DetectCollisions(
-                particles.particles,
+                particles,
                 grid,
                 0,
-                grid.cells.size());
+                grid.cells.size());*/
+		// Detect collisions - GPU
 
-        // Validate collisions
-        auto validCollisions =
+        DetectCollisionsCUDA(
+            d_sortedParticles,
+            d_cellStart,
+            d_cellCounts,
+            grid.nx,
+            grid.ny,
+            grid.nz,
+            0.1f,
+			d_particleCount);
+
+        // Validate collisions - CPU
+        /*auto validCollisions =
             ValidateCollisions(
                 collisions,
                 PARTICLE_COUNT);
@@ -467,8 +561,8 @@ int main()
         // Handle collisions
         for (const auto& c : validCollisions)
         {
-            if (!particles.particles[c.a].active ||
-                !particles.particles[c.b].active)
+            if (!particles[c.a].active ||
+                !particles[c.b].active)
             {
                 continue;
             }
@@ -477,7 +571,7 @@ int main()
                 c.a,
                 c.b,
                 particles);
-        }
+        }*/
 
 
         // Check for keyboard input
@@ -594,7 +688,9 @@ int main()
         glfwPollEvents();
     }
 
-    glfwTerminate();
+    glfwTerminate();/*
+    cudaFree(d_particles);
+    cudaFree(d_states);*/
 
     return 0;
 }

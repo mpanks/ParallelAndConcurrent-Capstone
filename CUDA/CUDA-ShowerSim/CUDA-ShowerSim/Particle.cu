@@ -1,15 +1,17 @@
 #include "Particle.h"
 
-Particles Spawn(int particleCount) {
+Particle* Spawn(int particleCount) {
     Particle* particles = new Particle[particleCount];
-    int* freeIndices = new int[particleCount];
+    //int* freeIndices = new int[particleCount];
     for (int i = 0; i < particleCount; i++)
     {
         Particle p{};
-
-		RespawnParticle(p);
+        RespawnParticle(p);
+        particles[i] = p;           // <--- store into array
+        //freeIndices[i] = i;         // initialize free list
     }
-    return Particles{ particles, freeIndices, particleCount };
+    //return Particles{ particles, freeIndices, particleCount };
+	return particles; // Return the first particle (not the whole array)
 }
 
 void RespawnParticle(

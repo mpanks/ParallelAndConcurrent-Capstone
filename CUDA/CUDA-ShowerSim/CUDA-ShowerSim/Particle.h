@@ -32,7 +32,7 @@ struct Particles
     int freeCount;           // number of available indices
 };
 
-Particles Spawn(int particleCount);
+Particle* Spawn(int particleCount);
 
 void SpawnSome(
     Particle* particles,

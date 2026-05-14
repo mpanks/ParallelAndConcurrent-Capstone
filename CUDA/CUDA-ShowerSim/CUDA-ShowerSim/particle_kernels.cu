@@ -1,237 +1,193 @@
-﻿#include "Particle.h"
-#include "particle_kernels.h"
+#include "particle_kernels.cuh"
+#include <time.h>
+#include <stdio.h>
 
 __global__ void InitCurandStates(
-    curandState* states,
+    curandState_t* states,
     unsigned long seed,
-    const int particle_count)
+    const int* particle_count)
 {
-    int i =
-        blockIdx.x * blockDim.x +
-        threadIdx.x;
-
-    if (i < particle_count)
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < *particle_count)
     {
         curand_init(seed, i, 0, &states[i]);
     }
 }
 
-curandState* LaunchInitCurandStates(
-    int particleCount)
+void LaunchInitCurandStates(
+    curandState_t* d_states,
+    const int h_particleCount,
+    const int* d_particleCount)
 {
-    int threadsPerBlock = 256;
-    int blocks =
-        (particleCount + threadsPerBlock - 1)
-        / threadsPerBlock;
+    const int threadsPerBlock = 256;
+    const int blocks = (h_particleCount + threadsPerBlock - 1) / threadsPerBlock;
 
-    curandState* d_states;
-
-    cudaMalloc(
-        &d_states,
-        particleCount * sizeof(curandState));
-
-    InitCurandStates <<<blocks, threadsPerBlock>>> (
+    InitCurandStates << <blocks, threadsPerBlock >> > (
         d_states,
-        time(NULL),
-        particleCount);
+        (unsigned long)time(NULL),
+        d_particleCount);
+
+    cudaError_t launchErr = cudaGetLastError();
+    if (launchErr != cudaSuccess)
+    {
+        fprintf(stderr, "CURAND launch error: %s\n", cudaGetErrorString(launchErr));
+        return;
+    }
 
     cudaError_t err = cudaDeviceSynchronize();
-
     if (err != cudaSuccess)
     {
-        fprintf(stderr,
-            "CUDA error: %s\n",
-            cudaGetErrorString(err));
+        fprintf(stderr, "CUDA error (curand init sync): %s\n", cudaGetErrorString(err));
+        return;
     }
-    else
-    {
-        printf("CUDA initialize success\n");
-    }
-
-    return d_states;
 }
 
 __device__ void Kernel_RespawnParticle(
-    Particle* particle, curandState* d_state)
+    Particle& particle,
+    curandState_t* state)
 {
-	Particle& p = *particle;
     // Emitter configuration
     const float centreY = 2.0f;
     const float radius = 0.05f;
 
-    // Random values (0–1)
-    float u1 = curand_uniform(d_state);
-    float u2 = curand_uniform(d_state);
-    float u3 = curand_uniform(d_state);
-    float u4 = curand_uniform(d_state);
-    float u5 = curand_uniform(d_state);
-    float u6 = curand_uniform(d_state);
+    // Random values
+    float u1 = curand_uniform(state);
+    float u2 = curand_uniform(state);
+    float u3 = curand_uniform(state);
+    float u4 = curand_uniform(state);
+    float u5 = curand_uniform(state);
+    float u6 = curand_uniform(state);
 
     // Uniform disc sampling
     float theta = u1 * 2.0f * 3.1415926f;
-    float r = sqrt(u2) * radius;
+    float r = sqrtf(u2) * radius;
 
     float x = r * cosf(theta);
     float z = r * sinf(theta);
     float y = centreY;
 
-    p.position = make_float3(x, y, z);
+    particle.position = make_float3(x, y, z);
 
     // Emission direction
     float azimuth = u3 * 2.0f * 3.1415926f;
-
-    float elevation =
-        u4 * 30.0f * (3.14159265358979323846f / 180.0f);
+    float elevation = u4 * 30.0f * (3.14159265358979323846f / 180.0f);
 
     const float INITIAL_VEL_MIN = 1.5f;
     const float INITIAL_VEL_MAX = 3.0f;
 
-    float initialVel =
-        INITIAL_VEL_MIN +
-        u5 * (INITIAL_VEL_MAX - INITIAL_VEL_MIN);
+    float initialVel = INITIAL_VEL_MIN + u5 * (INITIAL_VEL_MAX - INITIAL_VEL_MIN);
+    float speed = initialVel * (0.95f + u6 * 0.10f);
 
-    float speed =
-        initialVel *
-        (0.95f + u6 * 0.10f);
+    float xVel = speed * sinf(elevation) * cosf(azimuth);
+    float yVel = -speed * cosf(elevation);
+    float zVel = speed * sinf(elevation) * sinf(azimuth);
 
-    float xVel =
-        speed * sinf(elevation) * cosf(azimuth);
-
-    float yVel =
-        -speed * cosf(elevation);
-
-    float zVel =
-        speed * sinf(elevation) * sinf(azimuth);
-
-    p.velocity = make_float3(xVel, yVel, zVel);
+    particle.velocity = make_float3(xVel, yVel, zVel);
 
     // Thermodynamics
-    p.mass = 1.0f;
-    p.temperature = 1.0f;
+    particle.mass = 1.0f;
+    particle.temperature = 1.0f;
+    particle.active = true;
 }
 
 __global__ void UpdateParticles(
     Particle* particles,
-	curandState* d_states,
-    int particleCount,
+    curandState_t* states,
     float dt,
-    float gravity)
+    float gravity,
+    const int* particleCount)
 {
-    int i =
-        blockIdx.x *
-        blockDim.x +
-        threadIdx.x;
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= *particleCount) return;
 
-    if (i >= particleCount)
-    {
-        return;
-    }
+    Particle& p = particles[i];
+    if (!p.active) return;
 
-    Particle& p =
-        particles[i];
-
-    if (!p.active)
-    {
-        return;
-    }
-
-    // Gravity
-
-    p.velocity.y +=
-        gravity * dt;
-
-    // Integrate
-
-    p.position.x +=
-        p.velocity.x * dt;
-
-    p.position.y +=
-        p.velocity.y * dt;
-
-    p.position.z +=
-        p.velocity.z * dt;
+    // Gravity + integrate
+    p.velocity.y += gravity * dt;
+    p.position.x += p.velocity.x * dt;
+    p.position.y += p.velocity.y * dt;
+    p.position.z += p.velocity.z * dt;
 
     // Cooling
-    p.temperature -=
-        2.0f * dt / p.mass;
+    p.temperature -= 0.5f * dt / p.mass;
+    if (p.temperature < 0.0f) p.temperature = 0.0f;
 
-    if (p.temperature < 0.0f)
-    {
-        p.temperature = 0.0f;
-    }
+    // Floor collision / respawn: operate directly on global state
+    if (p.position.y <= 0.0f) {
+        // Emitter configuration
+        const float centreY = 2.0f;
+        const float radius = 0.05f;
 
-    // Floor collision
-    if (p.position.y <= 0.0f)
-    {
-        // Instantly respawn particle
-        curandState localState = d_states[i];
+        // Random values
+        float u1 = curand_uniform(&states[i]);
+        float u2 = curand_uniform(&states[i]);
+        float u3 = curand_uniform(&states[i]);
+        float u4 = curand_uniform(&states[i]);
+        float u5 = curand_uniform(&states[i]);
+        float u6 = curand_uniform(&states[i]);
 
-        Kernel_RespawnParticle(&p, &localState);
+        // Uniform disc sampling
+        float theta = u1 * 2.0f * 3.1415926f;
+        float r = sqrtf(u2) * radius;
 
-        d_states[i] = localState;
+        float x = r * cosf(theta);
+        float z = r * sinf(theta);
+        float y = centreY;
+
+        p.position = make_float3(x, y, z);
+
+        // Emission direction
+        float azimuth = u3 * 2.0f * 3.1415926f;
+        float elevation = u4 * 30.0f * (3.14159265358979323846f / 180.0f);
+
+        const float INITIAL_VEL_MIN = 1.5f;
+        const float INITIAL_VEL_MAX = 3.0f;
+
+        float initialVel = INITIAL_VEL_MIN + u5 * (INITIAL_VEL_MAX - INITIAL_VEL_MIN);
+        float speed = initialVel * (0.95f + u6 * 0.10f);
+
+        float xVel = speed * sinf(elevation) * cosf(azimuth);
+        float yVel = -speed * cosf(elevation);
+        float zVel = speed * sinf(elevation) * sinf(azimuth);
+
+        p.velocity = make_float3(xVel, yVel, zVel);
+
+        // Thermodynamics
+        p.mass = 1.0f;
+        p.temperature = 1.0f;
+        p.active = true;
     }
 
     // Wall collisions
-    if (p.position.x > 0.5f)
-    {
-        p.position.x = 0.5f;
-
-        p.velocity.x *= -1.0f;
-    }
-
-    if (p.position.x < -0.5f)
-    {
-        p.position.x = -0.5f;
-
-        p.velocity.x *= -1.0f;
-    }
-
-    if (p.position.z > 0.5f)
-    {
-        p.position.z = 0.5f;
-
-        p.velocity.z *= -1.0f;
-    }
-
-    if (p.position.z < -0.5f)
-    {
-        p.position.z = -0.5f;
-
-        p.velocity.z *= -1.0f;
-    }
+    if (p.position.x > 0.5f) { p.position.x = 0.5f; p.velocity.x *= -1.0f; }
+    if (p.position.x < -0.5f) { p.position.x = -0.5f; p.velocity.x *= -1.0f; }
+    if (p.position.z > 0.5f) { p.position.z = 0.5f; p.velocity.z *= -1.0f; }
+    if (p.position.z < -0.5f) { p.position.z = -0.5f; p.velocity.z *= -1.0f; }
 }
 
 void LaunchUpdateParticles(
     Particle* d_particles,
-    Particle* h_particles,
     curandState* d_states,
-    int count,
     float dt,
     float gravity,
-    const int* particle_count)
+    const int h_particle_count,
+    const int* d_particle_count)
 {
-    int threadsPerBlock = 256;
-    int blocks = (count + threadsPerBlock - 1) / threadsPerBlock;
+    const int threadsPerBlock = 256;
+    const int blocks = (h_particle_count + threadsPerBlock - 1) / threadsPerBlock;
 
-    // Allocate memory
-    UpdateParticles<<<blocks, threadsPerBlock>>>(d_particles, d_states, count, dt, gravity);
+    UpdateParticles << <blocks, threadsPerBlock >> > (d_particles, d_states, dt, gravity, d_particle_count);
 
-    // Wait for threads to finish
-    cudaError err = cudaDeviceSynchronize();
-
-    /*if (err != cudaSuccess)
-    {
-        fprintf(stderr, "CUDA error: %s\n", cudaGetErrorString(err));
+    cudaError_t err = cudaGetLastError();
+    if (err != cudaSuccess) {
+        fprintf(stderr, "Kernel launch error: %s\n", cudaGetErrorString(err));
+        return;
     }
-    else {
-        printf("CUDA success\n");
-    }*/
 
-    // Get results
-    //TODO: Move rendering to GPU??
-    cudaMemcpy(
-        h_particles,
-        d_particles,
-        sizeof(Particle) * (*particle_count),
-        cudaMemcpyDeviceToHost);
+    cudaError_t syncErr = cudaDeviceSynchronize();
+    if (syncErr != cudaSuccess) {
+        fprintf(stderr, "Kernel execution/sync error: %s\n", cudaGetErrorString(syncErr));
+        return;
+    }
 }

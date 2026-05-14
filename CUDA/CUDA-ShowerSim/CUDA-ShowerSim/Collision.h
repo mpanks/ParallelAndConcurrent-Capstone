@@ -1,10 +1,6 @@
 #pragma once
 #include <vector>
 
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtc/type_ptr.hpp>
-
 #include "Particle.h"
 struct Collision
 {
@@ -23,25 +19,25 @@ struct SpatialGrid
     std::vector<std::vector<int>> cells;
 };
 
-int GridIndex(
-    const SpatialGrid& grid,
-    int x,
-    int y,
-    int z);
-
-std::vector<Collision>
-DetectCollisions(
-    const Particle* particles,
-    const SpatialGrid& grid,
-    int startIdx,
-    int endIdx);
-
-void MergeParticles(
-    int a,
-    int b,
-    Particles& particles);
-
-std::vector<Collision>
-ValidateCollisions(
-    const std::vector<Collision>& collisions,
-    int particleCount);
+//int GridIndex(
+//    const SpatialGrid& grid,
+//    int x,
+//    int y,
+//    int z);
+//
+//std::vector<Collision>
+//DetectCollisions(
+//    const Particle* particles,
+//    const SpatialGrid& grid,
+//    int startIdx,
+//    int endIdx);
+//
+//void MergeParticles(
+//    int a,
+//    int b,
+//    Particle* particles);
+//
+//std::vector<Collision>
+//ValidateCollisions(
+//    const std::vector<Collision>& collisions,
+//    int particleCount);
