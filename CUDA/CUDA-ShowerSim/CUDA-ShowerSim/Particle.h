@@ -2,7 +2,7 @@
 
 #include <stdlib.h>
 #include <cmath>
-#include<vector_types.h>
+#include <vector_types.h>
 struct Particle
 {
     float3 position;

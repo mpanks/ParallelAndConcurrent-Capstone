@@ -94,13 +94,13 @@ void LaunchUpdateParticles(
 
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess) {
-        fprintf(stderr, "Kernel launch error: %s\n", cudaGetErrorString(err));
+        fprintf(stderr, "UpdateParticles kernel launch error: %s\n", cudaGetErrorString(err));
         return;
     }
 
     cudaError_t syncErr = cudaDeviceSynchronize();
     if (syncErr != cudaSuccess) {
-        fprintf(stderr, "Kernel execution/sync error: %s\n", cudaGetErrorString(syncErr));
+        fprintf(stderr, "UpdateParticles kernel execution/sync error: %s\n", cudaGetErrorString(syncErr));
         return;
     }
 }

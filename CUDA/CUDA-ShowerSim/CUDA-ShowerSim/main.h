@@ -1,4 +1,5 @@
 #pragma once
+#define GLFW_INCLUDE_NONE
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 #include "Particle.h"
@@ -7,6 +8,7 @@
 #include "particle_kernels.cuh"
 #include "collision_kernels.cuh"
 #include "ComputeOffsets.cuh"
+#include "ParticleVertices_kernels.cuh"
 
 #include <stdio.h>
 #include <curand_kernel.h>

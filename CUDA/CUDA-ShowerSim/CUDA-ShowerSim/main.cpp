@@ -267,10 +267,15 @@ int main()
 
     glBufferData(
         GL_ARRAY_BUFFER,
-        particleVertices.size() *
-        sizeof(ParticleVertex),
-        particleVertices.data(),
+        PARTICLE_COUNT * sizeof(ParticleVertex),
+        nullptr,
         GL_DYNAMIC_DRAW);
+
+    cudaGraphicsResource* cudaParticleVBO = nullptr;
+    
+    CreateParticleVerticesVBO(
+        &cudaParticleVBO,
+		particleVBO);
 
     // Vertex attributes
     glVertexAttribPointer(
@@ -312,6 +317,26 @@ int main()
         shaderProgram,
         "useUniformColor");
 
+    glm::mat4 model =
+        glm::mat4(1.0f);
+    // Camera stuff
+    glm::mat4 view =
+        glm::lookAt(
+            glm::vec3(0.0f, 1.0f, 3.0f), // camera position
+            glm::vec3(0.0f, 1.0f, 0.0f), // target
+            glm::vec3(0.0f, 1.0f, 0.0f)  // up vector
+        );
+
+    glm::mat4 projection =
+        glm::perspective(
+            glm::radians(45.0f),
+            1280.0f / 720.0f,
+            0.1f,
+            100.0f);
+
+    glm::mat4 mvp =
+        projection * view * model;
+
     // Render Loop
     while (!glfwWindowShouldClose(window))
     {
@@ -332,47 +357,6 @@ int main()
             gravity,
             PARTICLE_COUNT,
             d_particleCount);
-
-        // Get results
-        //TODO: Move rendering to GPU??
-        cudaError_t copyErr = cudaMemcpy(
-            particles,    // or pinned buffer (see below)
-            d_particles,
-            sizeof(Particle) * PARTICLE_COUNT,
-            cudaMemcpyDeviceToHost);
-        if (copyErr != cudaSuccess) {
-            fprintf(stderr, "cudaMemcpy D2H failed: %s\n", cudaGetErrorString(copyErr));
-        }
-
-        // Create particle vertices
-        particleVertices.clear();
-
-        for (int i = 0; i < PARTICLE_COUNT; i++)
-        {
-            if (!particles[i].active)
-                continue;
-
-            ParticleVertex v;
-
-            v.position = particles[i].position;
-
-            float t = particles[i].temperature;
-
-            if (currentMode == TEMPERATURE_MODE) {
-                v.color = float3{ t, 0.0f, 1.0f - t };
-            }
-            else {
-                float normalizedMass =
-                    particles[i].mass / 10.0f;
-                v.color =
-                    float3{
-                        normalizedMass,
-                        1.0f - normalizedMass,
-                        0.0f };
-            }
-
-            particleVertices.push_back(v);
-        }
 
         // GPU Grid
         BuildGridCountCuda(
@@ -466,26 +450,6 @@ int main()
         glClear(GL_COLOR_BUFFER_BIT |
             GL_DEPTH_BUFFER_BIT);
 
-        glm::mat4 model =
-            glm::mat4(1.0f);
-        // Camera stuff
-        glm::mat4 view =
-            glm::lookAt(
-                glm::vec3(0.0f, 1.0f, 3.0f), // camera position
-                glm::vec3(0.0f, 1.0f, 0.0f), // target
-                glm::vec3(0.0f, 1.0f, 0.0f)  // up vector
-            );
-
-        glm::mat4 projection =
-            glm::perspective(
-                glm::radians(45.0f),
-                1280.0f / 720.0f,
-                0.1f,
-                100.0f);
-
-        glm::mat4 mvp =
-            projection * view * model;
-
         // Select & bind/apply shaders
         glUseProgram(shaderProgram);
 
@@ -526,27 +490,42 @@ int main()
             0,
             64);
 
-        glBindBuffer(GL_ARRAY_BUFFER,
-            particleVBO);
-
-        glBufferSubData(
-            GL_ARRAY_BUFFER,
-            0,
-            particleVertices.size() *
-            sizeof(ParticleVertex),
-            particleVertices.data());
-
         // Set particle colours
         glUniform1i(
             useUniformColor,
             false);
 
         // Draw particles
+        cudaGraphicsMapResources(
+            1,
+            &cudaParticleVBO,
+            0);
+
+        ParticleVertex* d_vertices = nullptr;
+
+        size_t numBytes;
+
+        cudaGraphicsResourceGetMappedPointer(
+            (void**)&d_vertices,
+            &numBytes,
+            cudaParticleVBO);
+
+        BuildParticleVerticesCUDA(
+            d_particles,
+            d_vertices,
+            PARTICLE_COUNT,
+            d_particleCount,
+			currentMode);
         glBindVertexArray(particleVAO);
 
         glDrawArrays(GL_POINTS,
             0,
-            particleVertices.size());
+            PARTICLE_COUNT);
+
+        cudaGraphicsUnmapResources(
+            1,
+            &cudaParticleVBO,
+            0);
 
         //Must go last
         glfwSwapBuffers(window);
@@ -555,7 +534,7 @@ int main()
     }
 
     glfwTerminate();
-	// Freedom - CUDA memory
+	// Free CUDA memory
     cudaFree(d_particles);
     cudaFree(d_states);
 	cudaFree(d_particleCount);
