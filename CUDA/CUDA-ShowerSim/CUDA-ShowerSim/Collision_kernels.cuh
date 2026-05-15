@@ -1,28 +1,10 @@
+#pragma once
+#include "particle_kernels.cuh"
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 #include "Particle.h"
 #include "curand_kernel.h"
 #include "Collision.h"
-
-//void CreateGridCUDA(
-//    Particle* particles,
-//    int* cellStart,
-//    int* cellCount,
-//    int* particleCell,
-//    float cellSize,
-//    int nx, int ny, int nz,
-//    int h_particleCount,
-//    int* d_particleCount);
-//
-//void OrderGridCUDA(
-//    Particle* particles,
-//    Particle* sortedParticles,
-//    int* cellStart,
-//    int* cellCount,
-//    int* particleCell,
-//    int h_particleCount,
-//    int* d_particleCount,
-//    int totalCells);
 
 void BuildGridCountCuda(
     Particle* particles,
@@ -74,3 +56,10 @@ void DetectCollisionsCUDA(
     Collision* collisions,
     int* collisionCount,
     int totalCells);
+
+void ResolveCollisionsCUDA(
+    Particle* particles,
+    Collision* collisions,
+    int* d_collisionCount,
+    int h_collisionCount,
+    curandState_t* states);

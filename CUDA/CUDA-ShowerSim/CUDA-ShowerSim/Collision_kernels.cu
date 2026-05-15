@@ -1,6 +1,5 @@
 #include "Collision_kernels.cuh"
 #include <stdio.h>
-#include <cub/cub.cuh>
 //__global__ void AssignParticlesToCells(
 //    Particle* particles,
 //    int* cellStart,
@@ -138,33 +137,6 @@
 //
 //    sortedParticles[cellStart[cell] + index] = particles[i];
 //}
-
-void ComputeOffsets(
-    int* d_cellCounts,
-    int* d_cellOffsets,
-    int totalCells)
-{
-    void* d_tempStorage = nullptr;
-    size_t tempStorageSize = 0;
-
-    cub::DeviceScan::ExclusiveSum(
-        d_tempStorage,
-        tempStorageSize,
-        d_cellCounts,
-        d_cellOffsets,
-        totalCells);
-
-    cudaMalloc(&d_tempStorage, tempStorageSize);
-
-    cub::DeviceScan::ExclusiveSum(
-        d_tempStorage,
-        tempStorageSize,
-        d_cellCounts,
-        d_cellOffsets,
-        totalCells);
-
-    cudaFree(d_tempStorage);
-}
 
 __global__ void BuildGridCount(
     Particle* particles,
@@ -466,7 +438,7 @@ __global__ void DetectCollisionsGPU(
                         float dist2 =
                             dx * dx + dy * dy + dz * dz;
 
-                        const float radius = 1.0f;
+                        const float radius = 0.01f;
                         const float collisionDistance =
                             radius * 2.0f;
 
@@ -535,10 +507,25 @@ void DetectCollisionsCUDA(
     }
 }
 
-__global__ void ResolveCollisions(
+//__global__ void ResolveCollisions(
+//    Particle* particles,
+//    Collision* collisions,
+//    int* collisionCount)
+//{
+//    int i = blockIdx.x * blockDim.x + threadIdx.x;
+//    if (i >= *collisionCount) return;
+//
+//    int a = collisions[i].a;
+//    int b = collisions[i].b;
+//
+//    // Perform merge or impulse resolution here
+//}
+
+__global__ void ResolveCollisionsMerge(
     Particle* particles,
     Collision* collisions,
-    int* collisionCount)
+    int* collisionCount,
+    curandState_t* states)
 {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= *collisionCount) return;
@@ -546,5 +533,66 @@ __global__ void ResolveCollisions(
     int a = collisions[i].a;
     int b = collisions[i].b;
 
-    // Perform merge or impulse resolution here
+    auto& pa = particles[a];
+    auto& pb = particles[b];
+
+    float m0 = pa.mass;
+    float m1 = pb.mass;
+
+    float mNew =
+		m0 + m1;
+
+    pa.velocity.x =
+        (m0 * pa.velocity.x +
+            m1 * pb.velocity.x) / mNew;
+
+    pa.velocity.y =
+        (m0 * pa.velocity.y +
+            m1 * pb.velocity.y) / mNew;
+
+    pa.velocity.z =
+        (m0 * pa.velocity.z +
+            m1 * pb.velocity.z) / mNew;
+
+    pa.mass = mNew;
+
+    pa.temperature =
+        (m0 * pa.temperature +
+            m1 * pb.temperature)
+        / mNew;
+
+	curandState* local = &states[i];
+	Kernel_RespawnParticle(pb, local);
+	states[i] = *local;
+}
+
+void ResolveCollisionsCUDA(
+    Particle* particles,
+    Collision* collisions,
+	int* d_collisionCount,
+    int h_collisionCount,
+    curandState_t* states)
+{
+    int threadsPerBlock = 256;
+    int blocks =
+        (h_collisionCount + threadsPerBlock - 1)
+        / threadsPerBlock;
+    ResolveCollisionsMerge<<<blocks, threadsPerBlock>>>(
+        particles,
+        collisions,
+        d_collisionCount,
+        states);
+    // Check errors
+    cudaError_t err = cudaGetLastError();
+    if (err != cudaSuccess)
+    {
+        printf("ResolveCollisions launch error: %s\n",
+            cudaGetErrorString(err));
+    }
+    err = cudaDeviceSynchronize();
+    if (err != cudaSuccess)
+    {
+        printf("ResolveCollisions sync error: %s\n",
+            cudaGetErrorString(err));
+    }
 }

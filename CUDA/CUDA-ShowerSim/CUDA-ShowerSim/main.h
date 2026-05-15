@@ -6,6 +6,7 @@
 
 #include "particle_kernels.cuh"
 #include "collision_kernels.cuh"
+#include "ComputeOffsets.cuh"
 
 #include <stdio.h>
 #include <curand_kernel.h>

@@ -1,6 +1,4 @@
 #include "particle_kernels.cuh"
-#include <time.h>
-#include <stdio.h>
 
 __global__ void InitCurandStates(
     curandState_t* states,
@@ -42,54 +40,6 @@ void LaunchInitCurandStates(
     }
 }
 
-__device__ void Kernel_RespawnParticle(
-    Particle& particle,
-    curandState_t* state)
-{
-    // Emitter configuration
-    const float centreY = 2.0f;
-    const float radius = 0.05f;
-
-    // Random values
-    float u1 = curand_uniform(state);
-    float u2 = curand_uniform(state);
-    float u3 = curand_uniform(state);
-    float u4 = curand_uniform(state);
-    float u5 = curand_uniform(state);
-    float u6 = curand_uniform(state);
-
-    // Uniform disc sampling
-    float theta = u1 * 2.0f * 3.1415926f;
-    float r = sqrtf(u2) * radius;
-
-    float x = r * cosf(theta);
-    float z = r * sinf(theta);
-    float y = centreY;
-
-    particle.position = make_float3(x, y, z);
-
-    // Emission direction
-    float azimuth = u3 * 2.0f * 3.1415926f;
-    float elevation = u4 * 30.0f * (3.14159265358979323846f / 180.0f);
-
-    const float INITIAL_VEL_MIN = 1.5f;
-    const float INITIAL_VEL_MAX = 3.0f;
-
-    float initialVel = INITIAL_VEL_MIN + u5 * (INITIAL_VEL_MAX - INITIAL_VEL_MIN);
-    float speed = initialVel * (0.95f + u6 * 0.10f);
-
-    float xVel = speed * sinf(elevation) * cosf(azimuth);
-    float yVel = -speed * cosf(elevation);
-    float zVel = speed * sinf(elevation) * sinf(azimuth);
-
-    particle.velocity = make_float3(xVel, yVel, zVel);
-
-    // Thermodynamics
-    particle.mass = 1.0f;
-    particle.temperature = 1.0f;
-    particle.active = true;
-}
-
 __global__ void UpdateParticles(
     Particle* particles,
     curandState_t* states,
@@ -110,7 +60,7 @@ __global__ void UpdateParticles(
     p.position.z += p.velocity.z * dt;
 
     // Cooling
-    p.temperature -= 0.5f * dt / p.mass;
+    p.temperature -= 2.0f * dt / p.mass;
     if (p.temperature < 0.0f) p.temperature = 0.0f;
 
     // Floor collision / respawn: operate directly on global state
@@ -125,6 +75,8 @@ __global__ void UpdateParticles(
     if (p.position.x < -0.5f) { p.position.x = -0.5f; p.velocity.x *= -1.0f; }
     if (p.position.z > 0.5f) { p.position.z = 0.5f; p.velocity.z *= -1.0f; }
     if (p.position.z < -0.5f) { p.position.z = -0.5f; p.velocity.z *= -1.0f; }
+
+
 }
 
 void LaunchUpdateParticles(

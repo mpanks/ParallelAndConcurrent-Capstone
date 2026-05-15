@@ -89,6 +89,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <CudaCompile Include="Collision_kernels.cu" />
+    <CudaCompile Include="ComputeOffsets.cu" />
     <CudaCompile Include="particle_kernels.cu">
       <AdditionalCompilerOptions Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
       </AdditionalCompilerOptions>
@@ -108,6 +109,7 @@
   <ItemGroup>
     <ClInclude Include="Collision_kernels.cuh" />
     <ClInclude Include="Collision.h" />
+    <ClInclude Include="ComputeOffsets.cuh" />
     <ClInclude Include="main.h" />
     <ClInclude Include="Particle.h" />
     <ClInclude Include="particle_kernels.cuh" />

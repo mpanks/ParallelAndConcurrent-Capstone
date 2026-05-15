@@ -85,10 +85,6 @@ int main()
         d_particleCount);
 
     // Collision detection grid
-    /*Particle* d_sortedParticles = nullptr;
-    cudaMalloc(
-        &d_sortedParticles,
-		PARTICLE_COUNT * sizeof(Particle));*/
 
     SpatialGrid grid;
     grid.cellSize = 0.01f;
@@ -328,121 +324,7 @@ int main()
 
         lastTime = currentTime;
 
-        // Particle spawning
-        // SpawnSome(particles.particles, particles.freeIndices, particles.freeCount, 50);
-
-        // Physics - CPU
-        /*particleVertices.clear();
-
-        for (int i = 0;
-            i < PARTICLE_COUNT;
-            i++)
-        {
-            if (!particles.particles[i].active) continue;
-            // Gravity
-            particles.particles[i].velocity.y +=
-                gravity * dt;
-
-            // Integrate position
-            particles.particles[i].position.x +=
-                particles.particles[i].velocity.x * dt;
-
-            particles.particles[i].position.y +=
-                particles.particles[i].velocity.y * dt;
-
-            particles.particles[i].position.z +=
-                particles.particles[i].velocity.z * dt;
-
-            // Floor collision
-            if (particles.particles[i].position.y <= 0.0f && particles.particles[i].active)
-            {
-                particles.particles[i].active = false;
-
-                particles.freeIndices.push_back(i);
-
-                floorHits++;
-                continue;
-            }
-
-            // Wall collision
-            if (particles.particles[i].position.x > 0.5f)
-            {
-                particles.particles[i].position.x = 0.5f;
-
-                particles.particles[i].velocity.x *= -1.0f;
-            }
-
-            if (particles.particles[i].position.x < -0.5f)
-            {
-                particles.particles[i].position.x = -0.5f;
-
-                particles.particles[i].velocity.x *= -1.0f;
-            }
-
-            if (particles.particles[i].position.z > 0.5f)
-            {
-                particles.particles[i].position.z = 0.5f;
-
-                particles.particles[i].velocity.z *= -1.0f;
-            }
-
-            if (particles.particles[i].position.z < -0.5f)
-            {
-                particles.particles[i].position.z = -0.5f;
-
-                particles.particles[i].velocity.z *= -1.0f;
-            }
-
-            // Cooling
-            float coolingFactor = 0.5f;
-
-            particles.particles[i].temperature -=
-                coolingFactor *
-                dt /
-                particles.particles[i].mass;
-
-            particles.particles[i].temperature =
-                glm::clamp(
-                    particles.particles[i].temperature,
-                    0.0f,
-                    1.0f);
-
-            ParticleVertex v;
-
-            v.position = particles.particles[i].position;
-
-            if (currentMode ==
-                TEMPERATURE_MODE)
-            {
-                // Different to Rust - easier to see on screen
-                float t = particles.particles[i].temperature;
-
-                glm::vec3 hot =
-                    glm::vec3(1.0f, 0.2f, 0.0f);
-
-                glm::vec3 cold =
-                    glm::vec3(0.5f, 0.8f, 1.0f);
-
-                v.color =
-                    glm::mix(cold, hot, t);
-            }
-            else
-            {
-                float normalizedMass =
-                    particles.particles[i].mass / 10.0f;
-
-                v.color =
-                    glm::vec3(
-                        normalizedMass,
-                        1.0f - normalizedMass,
-                        0.0f);
-            }
-
-            particleVertices.push_back(v);
-        }*/
         // Physics - CUDA
-
-        // Launch threads
         LaunchUpdateParticles(
             d_particles,
 			d_states,
@@ -491,58 +373,6 @@ int main()
 
             particleVertices.push_back(v);
         }
-        // CPU Grid
-        /*
-        // Clear grid
-        for (auto& cell : grid.cells)
-        {
-            cell.clear();
-        }
-        // Re-populate grid
-        for (int i = 0;
-            i < PARTICLE_COUNT;
-            i++)
-        {
-            auto& p = particles[i];
-
-            if (!p.active)
-            {
-                continue;
-            }
-
-            int gx =
-                (int)((p.position.x + 0.5f)
-                    / grid.cellSize);
-
-            int gy =
-                (int)(p.position.y
-                    / grid.cellSize);
-
-            int gz =
-                (int)((p.position.z + 0.5f)
-                    / grid.cellSize);
-
-            if (gx < 0 || gy < 0 || gz < 0)
-            {
-                continue;
-            }
-
-            if (gx >= grid.nx ||
-                gy >= grid.ny ||
-                gz >= grid.nz)
-            {
-                continue;
-            }
-
-            int idx =
-                GridIndex(
-                    grid,
-                    gx,
-                    gy,
-                    gz);
-
-            grid.cells[idx].push_back(i);
-        }*/
 
         // GPU Grid
         BuildGridCountCuda(
@@ -588,14 +418,6 @@ int main()
             d_cellOffsets,
             d_cellEnds,
             totalCells);
-
-        // Detect collisions - CPU
-        /*auto collisions =
-            DetectCollisions(
-                particles,
-                grid,
-                0,
-                grid.cells.size());*/
 		// Detect collisions - GPU
         DetectCollisionsCUDA(
             d_particles,
@@ -610,27 +432,13 @@ int main()
 			d_collisionCount,
             totalCells);
 
-        // Validate collisions - CPU
-        /*auto validCollisions =
-            ValidateCollisions(
-                collisions,
-                PARTICLE_COUNT);
-
-        // Handle collisions
-        for (const auto& c : validCollisions)
-        {
-            if (!particles[c.a].active ||
-                !particles[c.b].active)
-            {
-                continue;
-            }
-
-            MergeParticles(
-                c.a,
-                c.b,
-                particles);
-        }*/
-
+		// Resolve Collisions - GPU
+        ResolveCollisionsCUDA(
+            d_particles,
+            d_collisions,
+            d_collisionCount,
+			PARTICLE_COUNT,
+            d_states);
 
         // Check for keyboard input
         if (glfwGetKey(window,
@@ -746,9 +554,22 @@ int main()
         glfwPollEvents();
     }
 
-    glfwTerminate();/*
+    glfwTerminate();
+	// Freedom - CUDA memory
     cudaFree(d_particles);
-    cudaFree(d_states);*/
+    cudaFree(d_states);
+	cudaFree(d_particleCount);
+    cudaFree(d_nx);
+	cudaFree(d_ny);
+	cudaFree(d_nz);
+	cudaFree(d_cellSize);
+	cudaFree(d_cellCounts);
+	cudaFree(d_cellParticleIndices);
+	cudaFree(d_cellOffsets);
+	cudaFree(d_cellWriteOffsets);
+	cudaFree(d_cellEnds);
+	cudaFree(d_collisions);
+	cudaFree(d_collisionCount);
 
     return 0;
 }
