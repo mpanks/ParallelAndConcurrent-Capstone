@@ -47,7 +47,6 @@ void ComputeEndsCUDA(
 void DetectCollisionsCUDA(
     Particle* particles,
     int* cellOffsets,
-    int* cellEnds,
     int* nx,
     int* ny,
     int* nz,

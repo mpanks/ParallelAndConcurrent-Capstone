@@ -1,5 +1,6 @@
 #include "Collision_kernels.cuh"
 #include <stdio.h>
+#define MAX_PARTICLES_PER_CELL 64
 //__global__ void AssignParticlesToCells(
 //    Particle* particles,
 //    int* cellStart,
@@ -350,7 +351,6 @@ void ComputeEndsCUDA(
 __global__ void DetectCollisionsGPU(
     Particle* particles,
     int* cellOffsets,
-    int* cellEnds,
     int* nx,
     int* ny,
     int* nz,
@@ -378,7 +378,7 @@ __global__ void DetectCollisionsGPU(
 
     // Get particle range for this cell
     int start = cellOffsets[cellIdx];
-    int end = cellEnds[cellIdx];
+    int end = (cellIdx == totalCells - 1) ? start : cellOffsets[cellIdx + 1];
 
     for (int i = start; i < end; i++)
     {
@@ -407,7 +407,7 @@ __global__ void DetectCollisionsGPU(
                         nxCell;
 
                     int neighborStart = cellOffsets[neighborIdx];
-                    int neighborEnd = cellEnds[neighborIdx];
+                    int neighborEnd = (neighborIdx == totalCells - 1) ? neighborStart : cellOffsets[neighborIdx + 1];
 
                     for (int j = neighborStart;
                         j < neighborEnd;
@@ -449,6 +449,9 @@ __global__ void DetectCollisionsGPU(
                             int outIndex =
                                 atomicAdd(collisionCount, 1);
 
+                            if (outIndex >= MAX_PARTICLES_PER_CELL)
+                                return;
+
                             collisions[outIndex] =
                             { pIndex, qIndex };
                         }
@@ -460,7 +463,6 @@ __global__ void DetectCollisionsGPU(
 void DetectCollisionsCUDA(
     Particle* particles,
     int* cellOffsets,
-    int* cellEnds,
     int* nx,
     int* ny,
     int* nz,
@@ -482,7 +484,7 @@ void DetectCollisionsCUDA(
     DetectCollisionsGPU<<<blocks, threadsPerBlock>>>(
         particles,
         cellOffsets,
-        cellEnds,
+        //cellEnds,
         nx,
         ny,
         nz,

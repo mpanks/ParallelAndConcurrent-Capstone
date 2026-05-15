@@ -35,7 +35,7 @@ GLFWwindow* CreateWindow() {
 int main()
 {
 	cudaSetDevice(0);
-    const int PARTICLE_COUNT = 10000;
+    const int PARTICLE_COUNT = 250'000;
 	int* d_particleCount = nullptr;
 
     cudaMalloc(
@@ -337,6 +337,20 @@ int main()
     glm::mat4 mvp =
         projection * view * model;
 
+    cudaGraphicsMapResources(
+        1,
+        &cudaParticleVBO,
+        0);
+
+    ParticleVertex* d_vertices = nullptr;
+
+    size_t numBytes;
+
+    cudaGraphicsResourceGetMappedPointer(
+        (void**)&d_vertices,
+        &numBytes,
+        cudaParticleVBO);
+
     // Render Loop
     while (!glfwWindowShouldClose(window))
     {
@@ -397,16 +411,10 @@ int main()
             PARTICLE_COUNT,
 			d_particleCount);
 
-        // Compute ends
-        ComputeEndsCUDA(
-            d_cellOffsets,
-            d_cellEnds,
-            totalCells);
 		// Detect collisions - GPU
         DetectCollisionsCUDA(
             d_particles,
             d_cellOffsets,
-            d_cellEnds,
             d_nx,
             d_ny,
             d_nz,
@@ -496,36 +504,18 @@ int main()
             false);
 
         // Draw particles
-        cudaGraphicsMapResources(
-            1,
-            &cudaParticleVBO,
-            0);
-
-        ParticleVertex* d_vertices = nullptr;
-
-        size_t numBytes;
-
-        cudaGraphicsResourceGetMappedPointer(
-            (void**)&d_vertices,
-            &numBytes,
-            cudaParticleVBO);
-
         BuildParticleVerticesCUDA(
             d_particles,
             d_vertices,
             PARTICLE_COUNT,
             d_particleCount,
 			currentMode);
+
         glBindVertexArray(particleVAO);
 
         glDrawArrays(GL_POINTS,
             0,
             PARTICLE_COUNT);
-
-        cudaGraphicsUnmapResources(
-            1,
-            &cudaParticleVBO,
-            0);
 
         //Must go last
         glfwSwapBuffers(window);
@@ -549,6 +539,11 @@ int main()
 	cudaFree(d_cellEnds);
 	cudaFree(d_collisions);
 	cudaFree(d_collisionCount);
+
+    cudaGraphicsUnmapResources(
+        1,
+        &cudaParticleVBO,
+        0);
 
     return 0;
 }
