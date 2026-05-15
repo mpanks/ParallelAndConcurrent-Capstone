@@ -509,7 +509,8 @@ int main()
             d_vertices,
             PARTICLE_COUNT,
             d_particleCount,
-			currentMode);
+			currentMode,
+            100);
 
         glBindVertexArray(particleVAO);
 

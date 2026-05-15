@@ -15,11 +15,12 @@ __global__ void BuildParticleVertices(
     Particle* particles,
     ParticleVertex* vertices,
     int* particleCount,
-    int renderMode)
+    int renderMode,
+    int step)
 {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
 
-    if (i >= *particleCount)
+    if (i >= *particleCount || i % step != 0)
         return;
 
     Particle& p = particles[i];
@@ -55,7 +56,8 @@ void BuildParticleVerticesCUDA(
     ParticleVertex* vertices,
     int h_particleCount,
 	int* d_particleCount,
-    int renderMode)
+    int renderMode,
+    int step)
 { 
         int blockSize = 256;
         int numBlocks = (h_particleCount + blockSize - 1) / blockSize;
@@ -63,7 +65,8 @@ void BuildParticleVerticesCUDA(
             particles,
             vertices,
             d_particleCount,
-            renderMode);
+            renderMode,
+            step);
         
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) {

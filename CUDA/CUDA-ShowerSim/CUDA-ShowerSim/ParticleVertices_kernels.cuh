@@ -11,7 +11,8 @@ void BuildParticleVerticesCUDA(
     ParticleVertex* vertices,
     int h_particleCount,
     int* d_particleCount,
-    int renderMode);
+    int renderMode,
+    int step);
 
 void CreateParticleVerticesVBO(
     cudaGraphicsResource** vertices,
