@@ -40,12 +40,31 @@ __global__ void BuildParticleVertices(
     }
     else
     {
-        float normalizedMass = p.mass / 10.0f;
-
-        v.color = make_float3(
-            normalizedMass,
-            1.0f - normalizedMass,
-            0.0f);
+        if(p.mass > 4.0f)
+            v.color = make_float3(
+                1.0f,
+                0.2f,
+				0.2f);
+        else if(p.mass >= 4.0f)
+            v.color = make_float3(
+                1.0f,
+                1.0f,
+                0.2f);
+        else if (p.mass >= 3.0f)
+            v.color = make_float3(
+                0.2f,
+                1.0f,
+                0.2f);
+		else if (p.mass >= 2.0f)
+            v.color = make_float3(
+                0.2f,
+                0.8f,
+                1.0f);
+		else
+            v.color = make_float3(
+                0.0f,
+                0.2f,
+				1.0f);
     }
 
     vertices[i] = v;
