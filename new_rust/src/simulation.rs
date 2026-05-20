@@ -26,7 +26,7 @@ pub fn physics_step(p: &mut Particles, dt: f32, circle: &[f32; 2], floor_counter
             for particle in chunk.iter_mut() {
                 if !particle.alive { continue; }
 
-                particle.time += dt;
+                //particle.time += dt;
 
                 // update velocity
                 particle.velocity[1] += g * dt;
@@ -40,6 +40,7 @@ pub fn physics_step(p: &mut Particles, dt: f32, circle: &[f32; 2], floor_counter
                 if particle.position[1] <= bounds.min_y {
                     respawn_particle(particle, circle);
                     floor_counter.fetch_add(1, Ordering::Relaxed);
+                    //particle.alive = false;
                     continue;
                 }
 

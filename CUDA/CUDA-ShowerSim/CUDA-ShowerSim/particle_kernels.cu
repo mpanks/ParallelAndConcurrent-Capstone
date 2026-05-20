@@ -44,7 +44,6 @@ __global__ void UpdateParticles(
     Particle* particles,
     curandState_t* states,
     float dt,
-    float gravity,
     const int* particleCount,
     uint64_t* floor_hits)
 {
@@ -55,7 +54,7 @@ __global__ void UpdateParticles(
     if (!p.active) return;
 
     // Gravity + integrate
-    p.velocity.y += gravity * dt;
+    p.velocity.y += GRAVITY * dt;
     p.position.x += p.velocity.x * dt;
     p.position.y += p.velocity.y * dt;
     p.position.z += p.velocity.z * dt;
@@ -87,7 +86,6 @@ void LaunchUpdateParticles(
     Particle* d_particles,
     curandState* d_states,
     float dt,
-    float gravity,
     const int h_particle_count,
     const int* d_particle_count,
     uint64_t* d_floorHits)
@@ -95,7 +93,7 @@ void LaunchUpdateParticles(
     const int threadsPerBlock = 256;
     const int blocks = (h_particle_count + threadsPerBlock - 1) / threadsPerBlock;
 
-    UpdateParticles<<<blocks, threadsPerBlock>>>(d_particles, d_states, dt, gravity, d_particle_count, d_floorHits);
+    UpdateParticles<<<blocks, threadsPerBlock>>>(d_particles, d_states, dt, d_particle_count, d_floorHits);
 
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess) {

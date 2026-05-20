@@ -137,7 +137,7 @@ pub fn generate_particle(circle: &[f32; 2]) -> [[f32; 3]; 2] {
     // Randomize emission direction independently from spawn position.
     let azimuth = rng.random_range(0.0..2.0 * std::f32::consts::PI);
     let elevation = rng.random_range(0.0..30.0_f32).to_radians();
-    let initial_vel = INITIAL_VEL_MAX;//rng.random_range(INITIAL_VEL_MIN..INITIAL_VEL_MAX);
+    let initial_vel = rng.random_range(INITIAL_VEL_MIN..INITIAL_VEL_MAX);
     let speed = initial_vel * rng.random_range(0.95..1.05);
 
     let x_vel = speed * elevation.sin() * azimuth.cos();

@@ -35,9 +35,7 @@ __global__ void BuildGridCount(
 void BuildGridCountCuda(
     Particle* particles,
     int* cellCounts,
-    int h_nx,
-    int h_ny,
-    int h_nz,
+    int totalCells,
 	int* d_nx,
 	int* d_ny,
 	int* d_nz,
@@ -45,8 +43,6 @@ void BuildGridCountCuda(
     int h_particleCount,
     int* d_particleCount)
 {
-    int totalCells =
-        h_nx * h_ny * h_nz;
     int threadsPerBlock = 256;
     int blocks =
         (h_particleCount + threadsPerBlock - 1)
@@ -125,9 +121,7 @@ void BuildGridCUDA(
     int* cellOffsets,
 	int* cellWriteOffsets,
     int* cellParticleIndices,
-	int h_nx,
-	int h_ny,
-	int h_nz,
+	int totalCells,
     int* d_nx,
     int* d_ny,
     int* d_nz,
@@ -135,8 +129,6 @@ void BuildGridCUDA(
 	int h_particleCount,
     int* d_particleCount)
 {
-    int totalCells =
-        h_nx * h_ny * h_nz;
     int threadsPerBlock = 256;
     int blocks =
         (h_particleCount + threadsPerBlock - 1)
@@ -347,7 +339,6 @@ void DetectCollisionsCUDA(
     DetectCollisionsGPU<<<blocks, threadsPerBlock>>>(
         particles,
         cellOffsets,
-        //cellEnds,
         nx,
         ny,
         nz,

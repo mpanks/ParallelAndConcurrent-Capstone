@@ -54,7 +54,7 @@ fn main() {
     let thread_collision = Arc::clone(&floor_collisions);
 
     let physics_pool = ThreadPoolBuilder::new()
-    .num_threads(2)
+    .num_threads(4)
     .build()
     .unwrap();
     let cooling_pool = ThreadPoolBuilder::new()
@@ -79,9 +79,7 @@ fn main() {
                 let _ = result_tx.send(collisions);
             }
         });
-    //}
 
-    //{
         let merge_particles = Arc::clone(&particles);
         let merge_done_tx = merge_done_tx.clone();
         let merge_job_rx = merge_job_rx.clone();
@@ -113,7 +111,7 @@ fn main() {
         let mut last = std::time::Instant::now();
 
         let mut emitter = Emitter {
-            spawn_rate: 12000.0,
+            spawn_rate: 50000.0,
             accumulator: 0.0,
         };
 
@@ -126,7 +124,7 @@ fn main() {
             last = now;
 
             let mut particles_guard = particles.lock().unwrap();
-            println!("Live: {}", particles_guard.live_particles());
+            //println!("Live: {}", particles_guard.live_particles());
             //println!("Dead: {}", particles_guard.dead_particles());
             emitter.accumulator += emitter.spawn_rate * dt;
             let mut to_spawn = emitter.accumulator.floor() as usize;
@@ -173,7 +171,7 @@ fn main() {
 
             let particles_guard = particles.lock().unwrap();
             let mut buffer: Vec<vertex::Vertex> = Vec::new();
-            particles_guard.write_positions_sampled(&mut buffer, 32);
+            particles_guard.write_positions_sampled(&mut buffer, 100);
             //println!("{}", buffer.iter().count());
             tx.send(buffer).ok();
         }

@@ -1,4 +1,5 @@
 #include "main.h"
+#include <iostream>
 
 GLFWwindow* CreateWindow() {
     GLFWwindow* window =
@@ -35,7 +36,7 @@ GLFWwindow* CreateWindow() {
 int main()
 {
 	cudaSetDevice(0);
-    const int PARTICLE_COUNT = 250'000;
+    const int PARTICLE_COUNT = 265'000;
 	const int TO_DRAW = PARTICLE_COUNT / 100;
 	int* d_particleCount = nullptr;
 	uint64_t* d_floorHits = nullptr;
@@ -53,8 +54,6 @@ int main()
         &PARTICLE_COUNT,
         sizeof(int),
 		cudaMemcpyHostToDevice);
-
-    const float gravity = -9.81f;
 
     float lastTime =
         (float)glfwGetTime();
@@ -373,7 +372,6 @@ int main()
             d_particles,
 			d_states,
             dt,
-            gravity,
             PARTICLE_COUNT,
             d_particleCount,
             d_floorHits);
@@ -382,9 +380,7 @@ int main()
         BuildGridCountCuda(
             d_particles,
             d_cellCounts,
-            grid.nx,
-            grid.ny,
-            grid.nz,
+			totalCells,
             d_nx,
             d_ny,
             d_nz,
@@ -407,9 +403,7 @@ int main()
             d_cellOffsets,
             d_cellWriteOffsets,
             d_cellParticleIndices,
-            grid.nx,
-            grid.ny,
-            grid.nz,
+            totalCells,
             d_nx,
             d_ny,
             d_nz,
@@ -515,8 +509,7 @@ int main()
             d_vertices,
             PARTICLE_COUNT,
             d_particleCount,
-			currentMode,
-            100);
+			currentMode);
 
         glBindVertexArray(particleVAO);
 
@@ -533,7 +526,7 @@ int main()
     glfwTerminate();
     uint64_t floorHits = 0;
     cudaMemcpy(&floorHits, d_floorHits, sizeof(int), cudaMemcpyDeviceToHost);
-	printf("Floor hits: %d\n", floorHits);
+	std::cout << "Floor hits: " << floorHits << std::endl;
 	// Free CUDA memory
     cudaFree(d_particles);
     cudaFree(d_states);

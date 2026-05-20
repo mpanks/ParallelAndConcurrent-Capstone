@@ -6,6 +6,7 @@ pub struct Collision {
     pub a: usize,
     pub b: usize,
 }
+const MAX_COLLISIONS:usize = 3000;
 
 #[derive(Clone)]
 pub struct CollisionSnapshot {
@@ -62,7 +63,6 @@ pub fn detect_collisions_snapshot(snapshot: &CollisionSnapshot, start_idx: usize
 
                         for &j in &snapshot.grid.cells[neighbor_idx] {
                             if i >= j { continue; }
-                            if snapshot.time[i] < 0.5 || snapshot.time[j] < 0.5 { continue; }
                             if !snapshot.alive[i] || !snapshot.alive[j] { continue; }
 
                             let dx = snapshot.positions[i][0] - snapshot.positions[j][0];
@@ -70,9 +70,11 @@ pub fn detect_collisions_snapshot(snapshot: &CollisionSnapshot, start_idx: usize
                             let dz = snapshot.positions[i][2] - snapshot.positions[j][2];
 
                             let dist2 = dx*dx + dy*dy + dz*dz;
-                            let radius = 0.001;
+                            let radius = 0.01;
                             if dist2 < (radius * 2.0) * (radius * 2.0) {
-                                collisions.push(Collision { a: i, b: j });
+                                if collisions.iter().count() < MAX_COLLISIONS{
+                                    collisions.push(Collision { a: i, b: j });
+                                }
                             }
                         }
                     }

@@ -6,11 +6,12 @@
 #include <stdio.h>
 #include <curand_kernel.h>
 
+#define GRAVITY -9.81f
+
 void LaunchUpdateParticles(
     Particle* d_particles,
     curandState* d_states,
     float dt,
-    float gravity,
     const int h_particle_count,
     const int* d_particle_count,
     uint64_t* d_floorHits);
