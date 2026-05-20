@@ -20,7 +20,7 @@ __global__ void BuildParticleVertices(
 {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
 
-    if (i >= *particleCount || i % step != 0)
+    if (i >= *particleCount)
         return;
 
     Particle& p = particles[i];

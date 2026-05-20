@@ -45,7 +45,8 @@ __global__ void UpdateParticles(
     curandState_t* states,
     float dt,
     float gravity,
-    const int* particleCount)
+    const int* particleCount,
+    uint64_t* floor_hits)
 {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= *particleCount) return;
@@ -59,6 +60,8 @@ __global__ void UpdateParticles(
     p.position.y += p.velocity.y * dt;
     p.position.z += p.velocity.z * dt;
 
+	p.lifetime += dt;
+
     // Cooling
     p.temperature -= 2.0f * dt / p.mass;
     if (p.temperature < 0.0f) p.temperature = 0.0f;
@@ -68,6 +71,7 @@ __global__ void UpdateParticles(
 		curandState_t* state = &states[i];
 		Kernel_RespawnParticle(p, state);
 		states[i] = *state;
+		atomicAdd(floor_hits, 1);
     }
 
     // Wall collisions
@@ -85,12 +89,13 @@ void LaunchUpdateParticles(
     float dt,
     float gravity,
     const int h_particle_count,
-    const int* d_particle_count)
+    const int* d_particle_count,
+    uint64_t* d_floorHits)
 {
     const int threadsPerBlock = 256;
     const int blocks = (h_particle_count + threadsPerBlock - 1) / threadsPerBlock;
 
-    UpdateParticles << <blocks, threadsPerBlock >> > (d_particles, d_states, dt, gravity, d_particle_count);
+    UpdateParticles<<<blocks, threadsPerBlock>>>(d_particles, d_states, dt, gravity, d_particle_count, d_floorHits);
 
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess) {

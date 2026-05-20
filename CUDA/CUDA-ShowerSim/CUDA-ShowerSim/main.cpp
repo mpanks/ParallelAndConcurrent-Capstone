@@ -36,11 +36,17 @@ int main()
 {
 	cudaSetDevice(0);
     const int PARTICLE_COUNT = 250'000;
+	const int TO_DRAW = PARTICLE_COUNT / 100;
 	int* d_particleCount = nullptr;
+	uint64_t* d_floorHits = nullptr;
 
     cudaMalloc(
         &d_particleCount,
 		sizeof(int));
+
+    cudaMalloc(
+        &d_floorHits,
+		sizeof(uint64_t));
 
     cudaMemcpy(
         d_particleCount,
@@ -49,7 +55,6 @@ int main()
 		cudaMemcpyHostToDevice);
 
     const float gravity = -9.81f;
-    int floorHits = 0;
 
     float lastTime =
         (float)glfwGetTime();
@@ -254,8 +259,8 @@ int main()
     glEnableVertexAttribArray(0);
 
     // Particle Shaders
-    GLuint particleVAO;
-    GLuint particleVBO;
+    GLuint particleVAO = 0;
+    GLuint particleVBO = 0;
 
     glGenVertexArrays(1, &particleVAO);
     glGenBuffers(1, &particleVBO);
@@ -337,14 +342,14 @@ int main()
     glm::mat4 mvp =
         projection * view * model;
 
+    ParticleVertex* d_vertices = nullptr;
+
+    size_t numBytes;
+
     cudaGraphicsMapResources(
         1,
         &cudaParticleVBO,
         0);
-
-    ParticleVertex* d_vertices = nullptr;
-
-    size_t numBytes;
 
     cudaGraphicsResourceGetMappedPointer(
         (void**)&d_vertices,
@@ -370,7 +375,8 @@ int main()
             dt,
             gravity,
             PARTICLE_COUNT,
-            d_particleCount);
+            d_particleCount,
+            d_floorHits);
 
         // GPU Grid
         BuildGridCountCuda(
@@ -516,7 +522,7 @@ int main()
 
         glDrawArrays(GL_POINTS,
             0,
-            PARTICLE_COUNT);
+            TO_DRAW);
 
         //Must go last
         glfwSwapBuffers(window);
@@ -525,6 +531,9 @@ int main()
     }
 
     glfwTerminate();
+    uint64_t floorHits = 0;
+    cudaMemcpy(&floorHits, d_floorHits, sizeof(int), cudaMemcpyDeviceToHost);
+	printf("Floor hits: %d\n", floorHits);
 	// Free CUDA memory
     cudaFree(d_particles);
     cudaFree(d_states);
@@ -540,6 +549,7 @@ int main()
 	cudaFree(d_cellEnds);
 	cudaFree(d_collisions);
 	cudaFree(d_collisionCount);
+    cudaFree(d_floorHits);
 
     cudaGraphicsUnmapResources(
         1,

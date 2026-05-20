@@ -107,6 +107,8 @@ void RespawnParticle(
 
     p.active = true;
 
+	p.lifetime = 0.0f;
+
     // Startup randomization creates continuous flow
 
     /*if (randomizeHeight)

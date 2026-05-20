@@ -12,7 +12,8 @@ void LaunchUpdateParticles(
     float dt,
     float gravity,
     const int h_particle_count,
-    const int* d_particle_count);
+    const int* d_particle_count,
+    uint64_t* d_floorHits);
 
 void LaunchInitCurandStates(
     curandState_t* d_states,

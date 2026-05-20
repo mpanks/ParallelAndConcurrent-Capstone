@@ -94,7 +94,7 @@ __global__ void BuildGridFill(
     if (i >= *particleCount) return;
 
     Particle p = particles[i];
-    if (!p.active) return;
+    if (!p.active || p.lifetime < 0.5f) return;
 
     // Compute cell coordinates
     int gx = (int)((p.position.x + 0.5f) / (*cellSize));
