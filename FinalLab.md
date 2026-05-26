@@ -12,7 +12,81 @@ As each thread is concerned with a single particle, locks are not required to pr
 
 Particles which collide with the floor are instantly respawned to remove an additional kernel launch. Wall collisions are elastic.
 
-![UpdateKernel.png](UpdateKernel.png)
+This handles drag calculations as a novel feature. This also handles cooling and floor/wall collisions as the brief says it must be handled by one thread per particle, not that it must be a separate kernel/function.
+
+```C++
+__global__ void UpdateParticles(
+    Particle* particles,
+    curandState_t* states,
+    float dt,
+    const int* particleCount,
+    uint64_t* floor_hits)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= *particleCount) return;
+
+    Particle& p = particles[i];
+    if (!p.active) return;
+
+    // Gravity
+    float3 vel = p.velocity;
+
+    // Compute speed
+    float speed = sqrtf(vel.x * vel.x + vel.y * vel.y + vel.z * vel.z);
+
+    // Quadratic drag: Fd = -k * speed * v  => a_drag = Fd / m = -k * speed * v / m
+    float3 a_drag = make_float3(0.0f, 0.0f, 0.0f);
+    if (speed > MIN_SPEED_EPS)
+    {
+        float k = DRAG_COEFFICIENT;
+        float invMass = 1.0f / max(p.mass, 1e-9f);
+        a_drag.x = -k * speed * vel.x * invMass;
+        a_drag.y = -k * speed * vel.y * invMass;
+        a_drag.z = -k * speed * vel.z * invMass;
+
+        // Store a simple drag metric for rendering
+        p.drag = k * speed;
+    }
+    else
+    {
+        p.drag = 0.0f;
+    }
+
+    // Apply gravity
+    vel.y += GRAVITY * dt;
+
+    // Apply drag acceleration
+    vel.x += a_drag.x * dt;
+    vel.y += a_drag.y * dt;
+    vel.z += a_drag.z * dt;
+
+    p.lifetime += dt;
+
+    // Integrate position
+    p.velocity = vel;
+    p.position.x += vel.x * dt;
+    p.position.y += vel.y * dt;
+    p.position.z += vel.z * dt;
+
+    // Cooling
+    p.temperature -= 2.0f * dt / p.mass;
+    if (p.temperature < 0.0f) p.temperature = 0.0f;
+
+    // Floor collision / respawn: operate directly on global state
+    if (p.position.y <= 0.0f) {
+        curandState_t* state = &states[i];
+        Kernel_RespawnParticle(p, state);
+        states[i] = *state;
+        atomicAdd(floor_hits, 1);
+    }
+
+    // Wall collisions
+    if (p.position.x > 0.5f) { p.position.x = 0.5f; p.velocity.x *= -1.0f; }
+    if (p.position.x < -0.5f) { p.position.x = -0.5f; p.velocity.x *= -1.0f; }
+    if (p.position.z > 0.5f) { p.position.z = 0.5f; p.velocity.z *= -1.0f; }
+    if (p.position.z < -0.5f) { p.position.z = -0.5f; p.velocity.z *= -1.0f; }
+}
+```
 
 ### Spatial Collision Grid
 
@@ -148,7 +222,73 @@ Collisions are then resolved.
 
 OpenGL is used to create and draw to a window, with the `cuda_gl_interop` passing particles to OpenGL to draw.
 
-![ParticleRenderingKernel.png](ParticleRenderingKernel.png)
+```C++
+__global__ void BuildParticleVertices(
+    Particle* particles,
+    ParticleVertex* vertices,
+    int* particleCount,
+    int renderMode)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (i >= *particleCount)
+        return;
+
+    Particle& p = particles[i];
+
+    ParticleVertex v;
+
+    v.position = p.position;
+
+    if (renderMode == 0)
+    {
+        float t = p.temperature;
+
+        v.color = make_float3(
+            t,
+            0.0f,
+            1.0f - t);
+    }
+	else if (renderMode == 1)
+    {
+        if(p.mass > 4.0f)
+            v.color = make_float3(
+                1.0f,
+                0.2f,
+				0.2f);
+        else if(p.mass >= 4.0f)
+            v.color = make_float3(
+                1.0f,
+                1.0f,
+                0.2f);
+        else if (p.mass >= 3.0f)
+            v.color = make_float3(
+                0.2f,
+                1.0f,
+                0.2f);
+		else if (p.mass >= 2.0f)
+            v.color = make_float3(
+                0.2f,
+                0.8f,
+                1.0f);
+		else
+            v.color = make_float3(
+                0.0f,
+                0.2f,
+				1.0f);
+    }
+    else {
+		float d = p.drag;
+
+        v.color = make_float3(
+            d,
+            0.0f,
+			1.0f - d);
+    }
+
+    vertices[i] = v;
+}
+```
 
 ### Synchronization
 
@@ -397,7 +537,7 @@ This uses `par_iter_mut` for mutabale 'parallel' iteration.
 
 ### Rendering
 
-A sample of particle positions are written to a buffer and sent to the render loop via a channel.
+A sample of particle positions are written to a buffer and sent to the render loop via a channel. View/colour modes are handled within the shader for the particles.
 
 ![Rust-Rendering.png](Rust-Rendering.png)
 
@@ -423,7 +563,7 @@ Total: 9669.5us
 
 Average: 966.95us
 
-Max stable particles: 110,000
+Max stable particles: 120,000
 
 As the `Install` function of `ThreadPool` is used, threads are spawned automatically when enough work exists. Increasing partition/chunk sizes reduces the number of threads spawned while increasing work/load for each thread, causing each thread to take longer to complete. Reducing this size has the opposite effect and potentially cause extra overhead for spawning and scheduling to outweigh time reduction.
 

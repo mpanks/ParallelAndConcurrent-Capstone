@@ -1,4 +1,8 @@
 #include "particle_kernels.cuh"
+#include <algorithm>
+
+#define DRAG_COEFFICIENT 0.1f
+#define MIN_SPEED_EPS 1e-6f
 
 __global__ void InitCurandStates(
     curandState_t* states,
@@ -53,13 +57,45 @@ __global__ void UpdateParticles(
     Particle& p = particles[i];
     if (!p.active) return;
 
-    // Gravity + integrate
-    p.velocity.y += GRAVITY * dt;
-    p.position.x += p.velocity.x * dt;
-    p.position.y += p.velocity.y * dt;
-    p.position.z += p.velocity.z * dt;
+    // Gravity
+    float3 vel = p.velocity;
 
-	p.lifetime += dt;
+    // Compute speed
+    float speed = sqrtf(vel.x * vel.x + vel.y * vel.y + vel.z * vel.z);
+
+    // Quadratic drag: Fd = -k * speed * v  => a_drag = Fd / m = -k * speed * v / m
+    float3 a_drag = make_float3(0.0f, 0.0f, 0.0f);
+    if (speed > MIN_SPEED_EPS)
+    {
+        float k = DRAG_COEFFICIENT;
+        float invMass = 1.0f / max(p.mass, 1e-9f);
+        a_drag.x = -k * speed * vel.x * invMass;
+        a_drag.y = -k * speed * vel.y * invMass;
+        a_drag.z = -k * speed * vel.z * invMass;
+
+        // Store a simple drag metric for rendering
+        p.drag = k * speed;
+    }
+    else
+    {
+        p.drag = 0.0f;
+    }
+
+    // Apply gravity
+    vel.y += GRAVITY * dt;
+
+    // Apply drag acceleration
+    vel.x += a_drag.x * dt;
+    vel.y += a_drag.y * dt;
+    vel.z += a_drag.z * dt;
+
+    p.lifetime += dt;
+
+    // Integrate position
+    p.velocity = vel;
+    p.position.x += vel.x * dt;
+    p.position.y += vel.y * dt;
+    p.position.z += vel.z * dt;
 
     // Cooling
     p.temperature -= 2.0f * dt / p.mass;
@@ -67,10 +103,10 @@ __global__ void UpdateParticles(
 
     // Floor collision / respawn: operate directly on global state
     if (p.position.y <= 0.0f) {
-		curandState_t* state = &states[i];
-		Kernel_RespawnParticle(p, state);
-		states[i] = *state;
-		atomicAdd(floor_hits, 1);
+        curandState_t* state = &states[i];
+        Kernel_RespawnParticle(p, state);
+        states[i] = *state;
+        atomicAdd(floor_hits, 1);
     }
 
     // Wall collisions
@@ -78,8 +114,6 @@ __global__ void UpdateParticles(
     if (p.position.x < -0.5f) { p.position.x = -0.5f; p.velocity.x *= -1.0f; }
     if (p.position.z > 0.5f) { p.position.z = 0.5f; p.velocity.z *= -1.0f; }
     if (p.position.z < -0.5f) { p.position.z = -0.5f; p.velocity.z *= -1.0f; }
-
-
 }
 
 void LaunchUpdateParticles(

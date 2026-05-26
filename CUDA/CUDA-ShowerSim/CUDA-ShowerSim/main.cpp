@@ -36,7 +36,7 @@ GLFWwindow* CreateWindow() {
 int main()
 {
 	cudaSetDevice(0);
-    const int PARTICLE_COUNT = 270'000;
+    const int PARTICLE_COUNT = 265'000;
 	const int TO_DRAW = PARTICLE_COUNT / 100;
 	int* d_particleCount = nullptr;
 	uint64_t* d_floorHits = nullptr;
@@ -447,6 +447,14 @@ int main()
         {
             currentMode =
                 MASS_MODE;
+        }
+
+        if (glfwGetKey(window,
+            GLFW_KEY_3)
+            == GLFW_PRESS)
+        {
+            currentMode =
+                DRAG_MODE;
         }
 
         // Clear first

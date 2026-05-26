@@ -198,6 +198,7 @@ std::vector<float> CreateEmitterCircle()
 enum RenderMode
 {
     TEMPERATURE_MODE,
-    MASS_MODE
+    MASS_MODE,
+    DRAG_MODE
 };
 #pragma endregion

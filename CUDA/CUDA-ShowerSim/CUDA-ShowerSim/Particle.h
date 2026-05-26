@@ -13,6 +13,8 @@ struct Particle
 
     float temperature;
 
+    float drag;
+
     bool active;
 };
 

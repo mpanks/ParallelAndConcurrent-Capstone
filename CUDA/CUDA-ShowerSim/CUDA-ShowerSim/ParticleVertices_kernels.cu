@@ -37,7 +37,7 @@ __global__ void BuildParticleVertices(
             0.0f,
             1.0f - t);
     }
-    else
+	else if (renderMode == 1)
     {
         if(p.mass > 4.0f)
             v.color = make_float3(
@@ -64,6 +64,14 @@ __global__ void BuildParticleVertices(
                 0.0f,
                 0.2f,
 				1.0f);
+    }
+    else {
+		float d = p.drag;
+
+        v.color = make_float3(
+            d,
+            0.0f,
+			1.0f - d);
     }
 
     vertices[i] = v;
