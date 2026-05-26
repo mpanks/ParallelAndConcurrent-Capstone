@@ -184,7 +184,7 @@ std::thread::spawn(move || {
             last = now;
 
             let mut particles_guard = particles.lock().unwrap();
-            println!("Live: {}", particles_guard.live_particles());
+            //println!("Live: {}", particles_guard.live_particles());
             //println!("Dead: {}", particles_guard.dead_particles());
             emitter.accumulator += emitter.spawn_rate * dt;
             let mut to_spawn = emitter.accumulator.floor() as usize;
@@ -244,7 +244,68 @@ This chunks the `Particle` vector, iterating and updating each particle without 
 
 The atomic floor counter allows the value to be updated by any thread at any time without needing to be locked. This is an `arc` to allow multiple ownership between threads.
 
-![Rust-Update.png](Rust-Update.png)
+This also includes drag calculations as a novel feature. There is also an additional drag view to acompany the temperature and mass views.
+
+```Rust
+pub fn physics_step(p: &mut Particles, dt: f32, circle: &[f32; 2], floor_counter: Arc<AtomicU64>, bounds: &Bounds, grid: &mut SpatialGrid) {
+    let g = -9.81;
+
+    // Process particles in parallel chunks
+    p.particles
+        .par_chunks_mut(256)
+        .for_each(|chunk| {
+            for particle in chunk.iter_mut() {
+                if !particle.alive { continue; }
+
+                //particle.time += dt;
+
+                // update velocity (gravity)
+                particle.velocity[1] += g * dt;
+
+                // apply linear drag: a_drag = -DRAG_K * v / mass
+                let vx = particle.velocity[0];
+                let vy = particle.velocity[1];
+                let vz = particle.velocity[2];
+                let speed = (vx*vx + vy*vy + vz*vz).sqrt();
+
+                if speed > 0.0 {
+                    let drag_acc_factor = DRAG_K / particle.mass;
+                    particle.velocity[0] += -drag_acc_factor * vx * dt;
+                    particle.velocity[1] += -drag_acc_factor * vy * dt;
+                    particle.velocity[2] += -drag_acc_factor * vz * dt;
+
+                    // store a normalized drag value for rendering (clamped 0..1)
+                    let drag_val = (drag_acc_factor * speed).abs();
+                    particle.drag = drag_val.min(1.0);
+                } else {
+                    particle.drag = 0.0;
+                }
+
+                // update position
+                particle.position[0] += particle.velocity[0] * dt;
+                particle.position[1] += particle.velocity[1] * dt;
+                particle.position[2] += particle.velocity[2] * dt;
+
+                // floor collision
+                if particle.position[1] <= bounds.min_y {
+                    respawn_particle(particle, circle);
+                    floor_counter.fetch_add(1, Ordering::Relaxed);
+                    //particle.alive = false;
+                    continue;
+                }
+
+                // boundary reflections - check position, not velocity
+                if particle.position[0] <= bounds.min_x || particle.position[0] >= bounds.max_x {
+                    particle.velocity[0] *= -1.0;
+                }
+
+                if particle.position[2] <= bounds.min_z || particle.position[2] >= bounds.max_z{
+                    particle.velocity[2] *= -1.0;
+                }
+            }
+        });
+}
+```
 
 ### Spatial Grid
 
@@ -316,7 +377,7 @@ pub fn detect_collisions_snapshot(snapshot: &CollisionSnapshot, start_idx: usize
 
 ### Collision Handling
 
-Detected collisions are validated before handling such that a given particle doesn't appear in two collisions and allows this lockless implementation.
+Detected collisions are sent to the handler thread via a channel and handled by a merge function.
 
 ![Rust-CollisionHandlingThread.png](Rust-CollisionHandlingThread.png)
 
@@ -326,11 +387,11 @@ The second particle `b` of a merge is made `inactive` or "killed" to be respawne
 
 ### Cooling
 
-Cooling is added to a thread pool.
+Cooling is added to a thread pool. This is separate to the `physics_step` to more closely follow the assignment brief.
 
 ![Rust-CoolingThreadPool.png](Rust-CoolingThreadPool.png)
 
-This uses `par_iter_mut` for mutabale parallel iteration
+This uses `par_iter_mut` for mutabale 'parallel' iteration.
 
 ![Rust-CoolingStep.png](Rust-CoolingStep.png)
 
@@ -391,15 +452,19 @@ This uses blocks of 256 threads (8 warps per block). The GPU schedules warps not
 
 ### Comparison
 
-The CUDA implementation takes around six times longer to execute per frame due to having to launch and synchronize GPU kernels. However, CUDA can also handle a larger simulation with more particles due to the GPU handling all particles and collisions at the same time as each particle is handled by its own thread for physics, and cooling.
+The CUDA implementation takes around six times longer to execute per frame due to having to launch and synchronize multiple GPU kernels. However, CUDA can also handle a larger simulation with more particles due to the GPU handling all particles and collisions at roughly the same time as each particle is handled by its own thread for physics, and cooling.
+
+Technically, not all particles are handled at the exact same time as the GPUs in the Fenner machines (RTX 3070s) have 46 Steaming Multiprocessors with 2048 threads each (2 blocks of 32 warps) for a total of 94,208 resident threads. As each particle is handled by one thread each, the particle array is automatically chunked CUDA with the functions being run on each chunk. 
 
 ## Reflection
 
 The Rust implementation went through several initial designs to find a good architecture, including an implementation which solely used channels to send and receive particles through a pipeline of functions for each step of the simulation. These faced many issues with bottlenecking and scalability, leading to the use of thread pools.
 
+The Rust simulation also experiences "banding" towards the top of the shower where particles aren't evenly distributed. I believe this is due to inactive particles being respawned at once and moved at the same time with similar velocities.
+
 The CUDA implementation turned out to be simpler, following a process of creating an initial CPU simulation which was migrated to CUDA functions with relevant synchronises.
 
-Each function is its own kernel with `cudaDeviceSynchronise` used as this ensures the entire grid completes before continuing. `__syncthreads()` on the deivce only synchronises threads within a block and causes race conditions. `cooperative_groups` were attempted but issues were faced with the grid size when scaling.
+Each function is its own kernel with `cudaDeviceSynchronise` used as this ensures the entire grid completes before continuing. `__syncthreads()` on the deivce only synchronises threads within a block and causes race conditions. `cooperative_groups` were attempted but issues were faced with the grid size when scaling. 
 
 ### Future Optimisations
 

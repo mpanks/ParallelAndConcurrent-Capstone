@@ -6,6 +6,9 @@ use spatial_grid::SpatialGrid;
 use bounds::Bounds;
 use std::sync::{Arc, atomic::{AtomicU64, Ordering}};
 use rayon::prelude::*;
+
+const COOLING_RATE:f32 = 2.0;
+const DRAG_K: f32 = 0.1; // linear drag coefficient (higher = more resistance)
 pub struct Simulation{
     pub current: Particles,
     pub render: Particles
@@ -28,8 +31,27 @@ pub fn physics_step(p: &mut Particles, dt: f32, circle: &[f32; 2], floor_counter
 
                 //particle.time += dt;
 
-                // update velocity
+                // update velocity (gravity)
                 particle.velocity[1] += g * dt;
+
+                // apply linear drag: a_drag = -DRAG_K * v / mass
+                let vx = particle.velocity[0];
+                let vy = particle.velocity[1];
+                let vz = particle.velocity[2];
+                let speed = (vx*vx + vy*vy + vz*vz).sqrt();
+
+                if speed > 0.0 {
+                    let drag_acc_factor = DRAG_K / particle.mass;
+                    particle.velocity[0] += -drag_acc_factor * vx * dt;
+                    particle.velocity[1] += -drag_acc_factor * vy * dt;
+                    particle.velocity[2] += -drag_acc_factor * vz * dt;
+
+                    // store a normalized drag value for rendering (clamped 0..1)
+                    let drag_val = (drag_acc_factor * speed).abs();
+                    particle.drag = drag_val.min(1.0);
+                } else {
+                    particle.drag = 0.0;
+                }
 
                 // update position
                 particle.position[0] += particle.velocity[0] * dt;
@@ -57,15 +79,12 @@ pub fn physics_step(p: &mut Particles, dt: f32, circle: &[f32; 2], floor_counter
 }
 
 pub fn cooling_step(p: &mut Particles, dt: f32) {
-    let cooling_rate = 2.0;
-    let ambient = 0.0;
-
     p.particles
         .par_iter_mut()
         .filter(|particle| particle.alive)
         .for_each(|particle| {
             // Cooling depends on temp diff. between particle and ambient - more realistic
-            particle.temp += ((ambient - particle.temp) * cooling_rate * dt) / particle.mass;
+            particle.temp -= (COOLING_RATE * dt) / particle.mass;
 
             if particle.temp < 0.0 {
                 particle.temp = 0.0;
@@ -82,6 +101,7 @@ fn respawn_particle(
     particle.position = params[0];
     particle.velocity = params[1];
     particle.temp = 1.0;
+        particle.drag = 0.0;
     particle.mass = 1.0;
     particle.time = 0.0;
 }

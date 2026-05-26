@@ -61,8 +61,10 @@ void BuildGridCountCuda(
         d_nz,
         d_cellSize,
         d_particleCount);
+
+    cudaDeviceSynchronize();
     // Check errors
-    cudaError_t err = cudaGetLastError();
+    /*cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess)
     {
         printf("BuildGrid launch error: %s\n",
@@ -73,7 +75,7 @@ void BuildGridCountCuda(
     {
         printf("BuildGrid sync error: %s\n",
             cudaGetErrorString(err));
-    }
+    }*/
 }
 __global__ void BuildGridFill(
     Particle* particles,
@@ -145,8 +147,9 @@ void BuildGridCUDA(
         d_nz,
         d_cellSize,
         d_particleCount);
+    cudaDeviceSynchronize();
     // Check errors
-    cudaError_t err = cudaGetLastError();
+    /*cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess)
     {
         printf("BuildGrid launch error: %s\n",
@@ -157,7 +160,7 @@ void BuildGridCUDA(
     {
         printf("BuildGrid sync error: %s\n",
             cudaGetErrorString(err));
-    }
+    }*/
 }
 
 __global__ void ComputeEnds(
@@ -188,8 +191,10 @@ void ComputeEndsCUDA(
         offsets,
         ends,
         totalCells);
+
+    cudaDeviceSynchronize();
     // Check errors
-    cudaError_t err = cudaGetLastError();
+    /*cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess)
     {
         printf("ComputeEnds launch error: %s\n",
@@ -200,7 +205,7 @@ void ComputeEndsCUDA(
     {
         printf("ComputeEnds sync error: %s\n",
             cudaGetErrorString(err));
-	}
+	}*/
 }
 
 __global__ void DetectCollisionsGPU(
@@ -347,8 +352,9 @@ void DetectCollisionsCUDA(
         collisions,
         collisionCount);
 
+    cudaDeviceSynchronize();
     // Check errors
-    cudaError_t err = cudaGetLastError();
+    /*cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess)
     {
         printf("DetectCollisionsGPU launch error: %s\n",
@@ -360,7 +366,7 @@ void DetectCollisionsCUDA(
     {
         printf("DetectCollisionsGPU sync error: %s\n",
             cudaGetErrorString(err));
-    }
+    }*/
 }
 
 __global__ void ResolveCollisionsMerge(
@@ -424,8 +430,10 @@ void ResolveCollisionsCUDA(
         collisions,
         d_collisionCount,
         states);
+
+    cudaDeviceSynchronize();
     // Check errors
-    cudaError_t err = cudaGetLastError();
+    /*cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess)
     {
         printf("ResolveCollisions launch error: %s\n",
@@ -436,5 +444,5 @@ void ResolveCollisionsCUDA(
     {
         printf("ResolveCollisions sync error: %s\n",
             cudaGetErrorString(err));
-    }
+    }*/
 }

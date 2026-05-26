@@ -95,7 +95,9 @@ void LaunchUpdateParticles(
 
     UpdateParticles<<<blocks, threadsPerBlock>>>(d_particles, d_states, dt, d_particle_count, d_floorHits);
 
-    cudaError_t err = cudaGetLastError();
+    cudaDeviceSynchronize();
+
+    /*cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess) {
         fprintf(stderr, "UpdateParticles kernel launch error: %s\n", cudaGetErrorString(err));
         return;
@@ -105,5 +107,5 @@ void LaunchUpdateParticles(
     if (syncErr != cudaSuccess) {
         fprintf(stderr, "UpdateParticles kernel execution/sync error: %s\n", cudaGetErrorString(syncErr));
         return;
-    }
+    }*/
 }

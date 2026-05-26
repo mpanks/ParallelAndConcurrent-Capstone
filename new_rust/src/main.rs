@@ -32,7 +32,7 @@ use crate::simulation::cooling_step;
 
 fn main() {
     let floor_collisions = Arc::new(AtomicU64::new(0));
-    const MAX_PARTICLES: i32 = 100_000;
+    const MAX_PARTICLES: i32 = 120_000;
 
     let circle_y = 2.0;
     let circle_radius = 0.05;
@@ -48,7 +48,7 @@ fn main() {
         max_z:  1.0,
     };
 
-    let particles = Arc::new(Mutex::new(Particles::new(MAX_PARTICLES, &circle)));
+    let mut particles = Arc::new(Mutex::new(Particles::new(MAX_PARTICLES, &circle)));
 
     let (tx, rx) = bounded(2);
     let thread_collision = Arc::clone(&floor_collisions);
@@ -67,9 +67,9 @@ fn main() {
     let (merge_job_tx, merge_job_rx) = unbounded::<Vec<collision::Collision>>();
     let (merge_done_tx, merge_done_rx) = bounded::<()>(1);
 
-    let mut grid = SpatialGrid::new(&bounds, 0.0125);
+    let mut grid = SpatialGrid::new(&bounds, 0.01);
 
-    for _ in 0..2 {
+    for _ in 0..3 {
         let job_rx = collision_job_rx.clone();
         let result_tx = collision_result_tx.clone();
 
@@ -87,18 +87,8 @@ fn main() {
         std::thread::spawn(move || {
             while let Ok(collisions) = merge_job_rx.recv() {
                 let mut particles = merge_particles.lock().unwrap();
-                let mut taken = vec![false; particles.len()];
-                let mut valid = Vec::new();
 
                 for c in collisions {
-                    if !taken[c.a] && !taken[c.b] {
-                        taken[c.a] = true;
-                        taken[c.b] = true;
-                        valid.push(c);
-                    }
-                }
-
-                for c in valid {
                     merge(c.a, c.b, &mut *particles);
                 }
 
@@ -111,7 +101,7 @@ fn main() {
         let mut last = std::time::Instant::now();
 
         let mut emitter = Emitter {
-            spawn_rate: 50000.0,
+            spawn_rate: 500000.0,
             accumulator: 0.0,
         };
 
@@ -194,6 +184,7 @@ fn main() {
         in vec3 position;
         in float temp;
         in float mass;
+        in float drag;
 
         uniform mat4 matrix;
         uniform mat4 perspective;
@@ -201,6 +192,7 @@ fn main() {
 
         out float vertex_temp;
         out float vertex_mass;
+        out float vertex_drag;
 
         void main() {
             vec4 world_pos = vec4(position, 1.0);
@@ -215,6 +207,7 @@ fn main() {
 
             vertex_temp = temp;
             vertex_mass = mass;
+            vertex_drag = drag;
         }
     "#;
 
@@ -223,6 +216,7 @@ fn main() {
 
         in float vertex_temp;
         in float vertex_mass;
+        in float vertex_drag;
         out vec4 color;
 
         uniform int render_mode;
@@ -232,6 +226,14 @@ fn main() {
             vec3(0.0, 0.0, 1.0), // cold
             vec3(1.0, 0.0, 0.0), // hot
             t
+            );
+        }
+
+        vec3 drag_color(float d) {
+            return mix(
+                vec3(0.0, 1.0, 1.0), // low drag -> cyan
+                vec3(1.0, 0.0, 0.0), // high drag -> red
+                d
             );
         }
 
@@ -253,8 +255,10 @@ fn main() {
 
             if (render_mode == 0) {
                 col = temperature_color(vertex_temp);
-            } else {
+            } else if (render_mode == 1) {
                 col = mass_color(vertex_mass);
+            } else {
+                col = drag_color(vertex_drag);
             }
 
             color = vec4(col, 1.0);
@@ -266,6 +270,7 @@ fn main() {
 
         in float vertex_temp;
         in float vertex_mass;
+        in float vertex_drag;
         out vec4 color;
 
         void main() {
@@ -311,6 +316,9 @@ fn main() {
                             }
                             Key::Character(ref s) if s == "2" => {
                                 render_mode = RenderMode::Mass;
+                            }
+                            Key::Character(ref s) if s == "3" => {
+                                render_mode = RenderMode::Drag;
                             }
                             _ => {}
                         }
@@ -358,7 +366,7 @@ fn main() {
                     let vertices: Vec<Vertex> = latest_positions
                         .iter()
                         //.step_by(100)
-                        .map(|&p| Vertex { position: p.position, temp: p.temp, mass: p.mass })
+                        .map(|&p| Vertex { position: p.position, temp: p.temp, mass: p.mass, drag: p.drag })
                         .collect();
 
                     let count = vertices.len();
@@ -371,7 +379,7 @@ fn main() {
 
 
                         let params = glium::DrawParameters {
-                            point_size: Some(5.0), // fallback
+                            point_size: Some(4.0), // fallback
                             ..Default::default()
                         };
 
@@ -423,7 +431,7 @@ fn build_vertex_buffer(display: &glium::Display<WindowSurface>, positions: &[[f3
 {
     let vertices: Vec<Vertex> = positions
         .iter()
-        .map(|&p| Vertex { position: p, temp: 1.0, mass: 1.0 })
+        .map(|&p| Vertex { position: p, temp: 1.0, mass: 1.0, drag: 0.0 })
         .collect();
 
     glium::VertexBuffer::dynamic(display, &vertices).unwrap()
@@ -443,10 +451,10 @@ fn draw_shower(bounds: &Bounds, circle_dimensions: &[f32;2], target: &mut Frame,
 
     // Back wall
     let back_wall = vec![
-        Vertex { position: [bounds.min_x, bounds.min_y, bounds.max_z], temp: 1.0, mass: 1.0 },
-        Vertex { position: [bounds.min_x, bounds.max_y, bounds.max_z], temp: 1.0, mass: 1.0 },
-        Vertex { position: [bounds.max_x, bounds.max_y, bounds.max_z], temp: 1.0, mass: 1.0 },
-        Vertex { position: [bounds.max_x, bounds.min_y, bounds.max_z], temp: 1.0, mass: 1.0 },
+        Vertex { position: [bounds.min_x, bounds.min_y, bounds.max_z], temp: 1.0, mass: 1.0, drag: 0.0 },
+        Vertex { position: [bounds.min_x, bounds.max_y, bounds.max_z], temp: 1.0, mass: 1.0, drag: 0.0 },
+        Vertex { position: [bounds.max_x, bounds.max_y, bounds.max_z], temp: 1.0, mass: 1.0, drag: 0.0 },
+        Vertex { position: [bounds.max_x, bounds.min_y, bounds.max_z], temp: 1.0, mass: 1.0, drag: 0.0 },
     ];
 
     let back_vertex_buffer = glium::VertexBuffer::new(display, &back_wall).unwrap();
@@ -454,10 +462,10 @@ fn draw_shower(bounds: &Bounds, circle_dimensions: &[f32;2], target: &mut Frame,
     target.draw(&back_vertex_buffer, &indices, &program, &uniforms, &Default::default()).unwrap();
 
     let left_wall = vec![
-        Vertex { position: [bounds.min_x, bounds.min_y, bounds.min_z], temp: 1.0, mass: 1.0 }, 
-        Vertex { position: [bounds.min_x, bounds.max_y, bounds.min_z], temp: 1.0, mass: 1.0 }, 
-        Vertex { position: [bounds.min_x, bounds.max_y, bounds.max_z], temp: 1.0, mass: 1.0 }, 
-        Vertex { position: [bounds.min_x, bounds.min_y, bounds.max_z], temp: 1.0, mass: 1.0 }, 
+        Vertex { position: [bounds.min_x, bounds.min_y, bounds.min_z], temp: 1.0, mass: 1.0, drag: 0.0 }, 
+        Vertex { position: [bounds.min_x, bounds.max_y, bounds.min_z], temp: 1.0, mass: 1.0, drag: 0.0 }, 
+        Vertex { position: [bounds.min_x, bounds.max_y, bounds.max_z], temp: 1.0, mass: 1.0, drag: 0.0 }, 
+        Vertex { position: [bounds.min_x, bounds.min_y, bounds.max_z], temp: 1.0, mass: 1.0, drag: 0.0 }, 
     ];
     let left_vertex_buffer = glium::VertexBuffer::new(display, &left_wall).unwrap();
 
@@ -465,10 +473,10 @@ fn draw_shower(bounds: &Bounds, circle_dimensions: &[f32;2], target: &mut Frame,
 
     // Right wall
     let right_wall = vec![
-        Vertex { position: [bounds.max_x, bounds.min_y, bounds.min_z], temp: 1.0, mass: 1.0 }, 
-        Vertex { position: [bounds.max_x, bounds.max_y, bounds.min_z], temp: 1.0, mass: 1.0 }, 
-        Vertex { position: [bounds.max_x, bounds.max_y, bounds.max_z], temp: 1.0, mass: 1.0 }, 
-        Vertex { position: [bounds.max_x, bounds.min_y, bounds.max_z], temp: 1.0, mass: 1.0 }, 
+        Vertex { position: [bounds.max_x, bounds.min_y, bounds.min_z], temp: 1.0, mass: 1.0, drag: 0.0 }, 
+        Vertex { position: [bounds.max_x, bounds.max_y, bounds.min_z], temp: 1.0, mass: 1.0, drag: 0.0 }, 
+        Vertex { position: [bounds.max_x, bounds.max_y, bounds.max_z], temp: 1.0, mass: 1.0, drag: 0.0 }, 
+        Vertex { position: [bounds.max_x, bounds.min_y, bounds.max_z], temp: 1.0, mass: 1.0, drag: 0.0 }, 
     ];
     let right_vertex_buffer = glium::VertexBuffer::new(display, &right_wall).unwrap();
 
@@ -476,8 +484,8 @@ fn draw_shower(bounds: &Bounds, circle_dimensions: &[f32;2], target: &mut Frame,
 
     // Floor
     let floor = vec![
-        Vertex { position: [bounds.min_x, bounds.min_y, bounds.min_z], temp: 1.0, mass: 1.0 },
-        Vertex { position: [bounds.max_x, bounds.min_y, bounds.min_z], temp: 1.0, mass: 1.0 },
+        Vertex { position: [bounds.min_x, bounds.min_y, bounds.min_z], temp: 1.0, mass: 1.0, drag: 0.0 },
+        Vertex { position: [bounds.max_x, bounds.min_y, bounds.min_z], temp: 1.0, mass: 1.0, drag: 0.0 },
     ];
     let floor_vertex_buffer = glium::VertexBuffer::new(display, &floor).unwrap();
 
@@ -485,8 +493,8 @@ fn draw_shower(bounds: &Bounds, circle_dimensions: &[f32;2], target: &mut Frame,
 
     // Ceiling
     let ceiling = vec![
-        Vertex { position: [bounds.min_x, bounds.max_y, bounds.min_z], temp: 1.0, mass: 1.0 },
-        Vertex { position: [bounds.max_x, bounds.max_y, bounds.min_z], temp: 1.0, mass: 1.0 },
+        Vertex { position: [bounds.min_x, bounds.max_y, bounds.min_z], temp: 1.0, mass: 1.0, drag: 0.0 },
+        Vertex { position: [bounds.max_x, bounds.max_y, bounds.min_z], temp: 1.0, mass: 1.0, drag: 0.0 },
     ];
     let ceiling_vertex_buffer = glium::VertexBuffer::new(display, &ceiling).unwrap();
 
@@ -508,7 +516,8 @@ fn draw_shower(bounds: &Bounds, circle_dimensions: &[f32;2], target: &mut Frame,
         circle.push(Vertex {
             position: [x, centre_y, z],
             temp: 1.0,
-            mass: 1.0
+            mass: 1.0,
+            drag: 0.0
         });
     }
     let circle_vertex_buffer = glium::VertexBuffer::new(display, &circle).unwrap();

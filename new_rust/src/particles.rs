@@ -3,8 +3,8 @@ use rand::{RngExt};
 use crate::vertex::Vertex;
 use rand;
 
-const INITIAL_VEL_MAX: f32 = 3.5;
-const INITIAL_VEL_MIN: f32 = 2.0;
+const INITIAL_VEL_MAX: f32 = 3.0;
+const INITIAL_VEL_MIN: f32 = 1.5;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
@@ -13,6 +13,7 @@ pub struct Particle {
     pub velocity: [f32; 3],
     pub mass: f32,
     pub temp: f32,
+    pub drag: f32,
     pub alive: bool,
     pub time: f32,
 }
@@ -24,6 +25,7 @@ impl Default for Particle {
             velocity: [0.0, 0.0, 0.0],
             mass: 1.0,
             temp: 1.0,
+            drag: 0.0,
             alive: false,
             time: 0.0,
         }
@@ -47,6 +49,7 @@ impl Particles{
                 velocity: params[1],
                 mass: 1.0,
                 temp: 1.0,
+                drag: 0.0,
                 alive: false,
                 time: 0.0,
             });
@@ -88,7 +91,8 @@ impl Particles{
                     Vertex{
                         position: particle.position,
                         temp: particle.temp,
-                        mass: particle.mass
+                        mass: particle.mass,
+                        drag: particle.drag,
                     }
                 );
             }
@@ -114,6 +118,7 @@ impl Particles{
             velocity: params[1],
             mass: 1.0,
             temp: 1.0,
+            drag: 0.0,
             alive: true,
             time: 0.0,
         };

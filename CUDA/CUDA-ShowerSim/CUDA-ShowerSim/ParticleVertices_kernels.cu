@@ -83,8 +83,10 @@ void BuildParticleVerticesCUDA(
             vertices,
             d_particleCount,
             renderMode);
+
+        cudaDeviceSynchronize();
         
-        cudaError_t err = cudaGetLastError();
+        /*cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) {
             fprintf(stderr, "BuildParticleVertices kernel launch error: %s\n", cudaGetErrorString(err));
             return;
@@ -94,7 +96,7 @@ void BuildParticleVerticesCUDA(
         if (syncErr != cudaSuccess) {
             fprintf(stderr, "BuildParticleVertices kernel execution/sync error: %s\n", cudaGetErrorString(syncErr));
             return;
-        }
+        }*/
 }
 
 void CreateParticleVerticesVBO(
